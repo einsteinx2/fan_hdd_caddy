@@ -54,7 +54,8 @@ num_drives = 4;            // number of drives across the base
 // outer face of the first drive, one against the outer face of
 // the last drive.
 wall_thickness = 3;            // Y thickness of each side wall (mm)
-wall_height    = drive_width;  // Z height of the walls (full drive height)
+// (Wall height is derived: all walls rise flush with the band tops --
+//  see `wall_top` in the derived-values section.)
 
 // ---------- Divider walls (between the drives) ----------
 // Walls between adjacent drives. They run the full length of the
@@ -71,21 +72,30 @@ band_thickness  = 3;     // Z thickness of each band (mm)
 band_screw_d      = 3.8; // clearance hole for 6-32 screw shaft (mm)
 band_screw_head_d = 7.0; // flat-head diameter for countersink (mm)
 
-// ---------- Airflow: honeycomb in the base ----------
-// Hexagonal vent pattern cut through the base plate. `hex_size` is
-// the clear opening across the flats of each hole; `hex_wall` is the
-// strut thickness left between holes. A solid square is kept around
-// each corner screw so the fan-mounting holes stay in solid material.
-hex_size      = 10;   // flat-to-flat opening of each hex hole (mm)
-hex_wall      = 2;    // strut thickness between holes (mm)
-corner_square = 15;   // solid square around each corner screw (1.5cm)
+// ---------- Airflow: honeycomb vents ----------
+// Hexagonal vent pattern cut through the base plate AND all the walls.
+// `hex_size` is the clear opening across the flats of each hole;
+// `hex_wall` is the strut thickness left between holes. On the base, a
+// solid square is kept around each corner screw and solid strips are
+// kept under the walls. On the walls, a solid border is kept around
+// every edge.
+hex_size         = 10;  // flat-to-flat opening of each hex hole (mm)
+hex_wall         = 2;   // strut thickness between holes (mm)
+corner_square    = 15;  // solid square around each corner screw (1.5cm)
+wall_vent_border = 15;  // solid border around each wall's edges (1.5cm)
 
-// ---------- Visualization ----------
-show_drives = true;        // render translucent ghost drives for layout check
+// Base reinforcement: keep extra solid material (no honeycomb) here.
+base_edge_border    = 5;  // solid border around all 4 base edges (mm)
+divider_base_extra  = 2;  // extra solid base on each side of the divider bottoms (mm)
+
+/* [Visualization] */
+// Show translucent drive placeholders (GUI preview only; never exported)
+show_drives = true;        // [true, false]
 
 // ============================================================
 // Derived values
 // ============================================================
+/* [Hidden] */
 
 // Y center of each drive: evenly distributed across the base.
 drive_pitch = fan_size / num_drives;               // center-to-center (Y)
@@ -103,14 +113,13 @@ side_hole_x2 = side_hole_x1 + side_hole_spacing;        // far column
 // (+Y) edge. Same for the up- and down-facing holes.
 function drive_hole_y(i) = drive_y(i) + drive_height/2 - side_hole_from_base;
 
-// Z of the band underside = top of the drives (and the walls).
+// Z of the band underside = top of the drives.
 band_z = base_thickness + drive_width;
 
-// Small overlap so stacked geometry (bands on walls) fuses into a
-// single watertight solid. Walls/dividers are grown up by this much
-// so the band's underside overlaps their tops rather than just
-// touching at a coincident plane.
-weld = 0.1;
+// Walls rise all the way up flush with the top of the bands, so the
+// whole caddy has a flat top. (The bands interpenetrate the walls
+// where they cross, fusing everything into one solid.)
+wall_top = band_z + band_thickness;
 
 // ============================================================
 // Generic modules
@@ -147,24 +156,51 @@ module countersunk_hole(thickness, shaft_d, head_d, top = true) {
 // Caddy modules
 // ============================================================
 
-// A field of hexagonal through-holes on a honeycomb lattice, sized so
-// the struts left between holes are exactly `hex_wall` thick. Covers
-// the whole base footprint; holes falling outside the plate simply
-// cut nothing. `thickness` is the plate thickness to bore through.
-module honeycomb_holes(thickness) {
+// A 2D honeycomb hole field filling a centered (w x h) rectangle. The
+// lattice is sized so the struts left between holes are exactly
+// `hex_wall` thick; holes are clipped to the rectangle so its border
+// is left solid.
+module honeycomb_panel_2d(w, h) {
     S      = hex_size + hex_wall;   // center-to-center (all 6 neighbors)
     r_hole = hex_size / sqrt(3);    // circumradius of each hex hole
-    dx     = S * sqrt(3) / 2;       // column pitch (X)
-    dy     = S;                     // row pitch within a column (Y)
-    nx = ceil((fan_size/2 + S) / dx);
-    ny = ceil((fan_size/2 + S) / dy) + 1;
-    for (col = [-nx : nx]) {
-        x = col * dx;
-        y_off = (col % 2 == 0) ? 0 : dy/2;   // stagger alternate columns
-        for (row = [-ny : ny])
-            translate([x, row*dy + y_off, -1])
-                cylinder(h = thickness + 2, r = r_hole, $fn = 6);
+    dx     = S * sqrt(3) / 2;       // column pitch
+    dy     = S;                     // row pitch within a column
+    nx = ceil((w/2) / dx) + 1;
+    ny = ceil((h/2) / dy) + 1;
+    intersection() {
+        square([w, h], center = true);
+        for (col = [-nx : nx]) {
+            x = col * dx;
+            y_off = (col % 2 == 0) ? 0 : dy/2;   // stagger alternate columns
+            for (row = [-ny : ny])
+                translate([x, row*dy + y_off]) circle(r = r_hole, $fn = 6);
+        }
     }
+}
+
+// Honeycomb through-holes for the base plate. The hex field is inset
+// by `base_edge_border` so a solid border is left around all 4 edges.
+// `thickness` is the plate thickness to bore through.
+module honeycomb_holes(thickness) {
+    inner = fan_size - 2 * base_edge_border;
+    translate([0, 0, -1])
+        linear_extrude(height = thickness + 2)
+            honeycomb_panel_2d(inner, inner);
+}
+
+// Honeycomb vent cutter for the walls: a hex field in the X-Z plane,
+// inset `wall_vent_border` from every wall edge, swept through Y so it
+// perforates all five walls identically. Its Z range stays clear of
+// the base and the bands, so only the walls get vented.
+module wall_honeycomb_cutter() {
+    inner_w = fan_size - 2 * wall_vent_border;
+    inner_h = (wall_top - base_thickness) - 2 * wall_vent_border;
+    zc      = (base_thickness + wall_top) / 2;
+    depth   = fan_size + 2;             // sweep through the full Y depth
+    translate([0, depth/2, zc])
+        rotate([90, 0, 0])
+            linear_extrude(height = depth)
+                honeycomb_panel_2d(inner_w, inner_h);
 }
 
 // Solid keep-out squares centered on each corner screw, so the
@@ -187,11 +223,13 @@ module wall_footprints(thickness) {
         cube([fan_size, wall_thickness, h]);
     translate([-fan_size/2, fan_size/2 - wall_thickness, z0])
         cube([fan_size, wall_thickness, h]);
-    // dividers (centered in each gap)
+    // dividers (centered in each gap), widened by divider_base_extra on
+    // each side to reinforce where they join the base
     for (i = [0 : num_drives - 2]) {
-        ymid = drive_y(i) + drive_pitch / 2;
-        translate([-fan_size/2, ymid - divider_thickness/2, z0])
-            cube([fan_size, divider_thickness, h]);
+        ymid  = drive_y(i) + drive_pitch / 2;
+        strip = divider_thickness + 2 * divider_base_extra;
+        translate([-fan_size/2, ymid - strip/2, z0])
+            cube([fan_size, strip, h]);
     }
 }
 
@@ -225,17 +263,18 @@ module fan_mount_holes() {
 // flank the outer faces of the first and last drives. Clipped to the
 // base outline so they follow its rounded corners and stay on the plate.
 module side_walls() {
+    h = wall_top - base_thickness;   // rise flush with the band tops
     intersection() {
         union() {
             // wall flush against the -Y edge of the base
             translate([-fan_size/2, -fan_size/2, base_thickness])
-                cube([fan_size, wall_thickness, wall_height + weld]);
+                cube([fan_size, wall_thickness, h]);
             // wall flush against the +Y edge of the base
             translate([-fan_size/2, fan_size/2 - wall_thickness, base_thickness])
-                cube([fan_size, wall_thickness, wall_height + weld]);
+                cube([fan_size, wall_thickness, h]);
         }
         // clip to the base footprint (rounded corners)
-        rounded_plate(fan_size, base_thickness + wall_height + weld, base_corner_r);
+        rounded_plate(fan_size, wall_top, base_corner_r);
     }
 }
 
@@ -243,16 +282,17 @@ module side_walls() {
 // Full length and height like the side walls (clipped to the base
 // outline) so the clamp bands land on them.
 module dividers() {
+    h = wall_top - base_thickness;   // rise flush with the band tops
     intersection() {
         union() {
             for (i = [0 : num_drives - 2]) {
                 ymid = drive_y(i) + drive_pitch / 2;   // gap centerline
                 translate([-fan_size/2, ymid - divider_thickness/2, base_thickness])
-                    cube([fan_size, divider_thickness, wall_height + weld]);
+                    cube([fan_size, divider_thickness, h]);
             }
         }
         // clip to the base footprint (rounded corners)
-        rounded_plate(fan_size, base_thickness + wall_height + weld, base_corner_r);
+        rounded_plate(fan_size, wall_top, base_corner_r);
     }
 }
 
@@ -310,6 +350,7 @@ module caddy() {
             clamp_bands();
         }
         fan_mount_holes();
+        wall_honeycomb_cutter();
     }
 }
 
@@ -319,5 +360,4 @@ if (show_drives) ghost_drives();
 // Console report
 echo(str("Air gap between drives: ", air_gap, " mm"));
 echo(str("Drive overhang per X end: ", (drive_length - fan_size)/2, " mm"));
-echo(str("Planned total height (base + drive): ",
-         base_thickness + drive_width, " mm"));
+echo(str("Overall caddy height (flush top): ", wall_top, " mm"));
