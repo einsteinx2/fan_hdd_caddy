@@ -344,20 +344,47 @@ module dividers() {
 // `cham = 0` the bump is a plain cube (used for the base-supported row).
 // `lead_lo` / `lead_hi` bevel the tip corner at the -X / +X end so a drive
 // sliding in from that end funnels into the rail instead of catching.
-module bump_solid(xc, u_back, u_tip, z0, cham, lead_lo = false, lead_hi = false) {
+module bump_solid(xc, u_back, u_tip, z0, cham,
+                  lead_lo = false, lead_hi = false,
+                  ramp_lo = false, ramp_hi = false) {
     x_lo   = xc - rib_width/2;
     x_hi   = xc + rib_width/2;
     tipdir = (u_tip > u_back) ? 1 : -1;     // +1: tip is at larger Y (lower wall)
     difference() {
-        translate([xc - rib_width/2, 0, 0])
-            rotate([90, 0, 90])             // map polygon (Y,Z) -> world, extrude along X
-                linear_extrude(rib_width)
-                    polygon([
-                        [u_back, z0 + rib_height], // back-top (into the wall)
-                        [u_tip,  z0 + rib_height], // tip-top
-                        [u_tip,  z0 + cham],       // tip: bottom of vertical grip face
-                        [u_back, z0]               // back-bottom: underside slopes to tip
-                    ]);
+        union() {
+            // main bump body
+            translate([xc - rib_width/2, 0, 0])
+                rotate([90, 0, 90])         // map polygon (Y,Z) -> world, extrude along X
+                    linear_extrude(rib_width)
+                        polygon([
+                            [u_back, z0 + rib_height], // back-top (into the wall)
+                            [u_tip,  z0 + rib_height], // tip-top
+                            [u_tip,  z0 + cham],       // tip: bottom of vertical grip face
+                            [u_back, z0]               // back-bottom: underside slopes to tip
+                        ]);
+            // side ramps: ADD a sloped lead-in extending OUT from an X-end face
+            // (the bump keeps full size) so a drive sliding past doesn't catch
+            // the leading corner. Each ramp hulls the bump's end profile down to
+            // the wall over `lead_in` in X, preserving the underside chamfer.
+            if (ramp_lo)
+                hull() {
+                    translate([x_lo, 0, 0])
+                        rotate([90, 0, 90]) linear_extrude(0.01)
+                            polygon([[u_back, z0 + rib_height], [u_tip, z0 + rib_height],
+                                     [u_tip, z0 + cham], [u_back, z0]]);
+                    translate([x_lo - lead_in, u_back, z0 + rib_height/2])
+                        cube([0.01, 0.02, rib_height], center = true);
+                }
+            if (ramp_hi)
+                hull() {
+                    translate([x_hi - 0.01, 0, 0])
+                        rotate([90, 0, 90]) linear_extrude(0.01)
+                            polygon([[u_back, z0 + rib_height], [u_tip, z0 + rib_height],
+                                     [u_tip, z0 + cham], [u_back, z0]]);
+                    translate([x_hi + lead_in, u_back, z0 + rib_height/2])
+                        cube([0.01, 0.02, rib_height], center = true);
+                }
+        }
         // lead-in: ramp the gripping face from flush with the wall (`u_back`)
         // at the entry end up to full protrusion (`u_tip`) over `lead_in` in X,
         // so the ramp starts exactly at the wall end (no flat dead zone).
@@ -401,15 +428,19 @@ module drive_retainers() {
                     float = r[1];
                     for (j = [0 : rib_count - 1]) {
                         x = rib_x(j);
-                        // only the end bumps get a lead-in, on their outer end
-                        lead_lo = (j == 0);                 // bevel -X end
-                        lead_hi = (j == rib_count - 1);     // bevel +X end
+                        // end bumps get a cut-in lead-in on their outer end;
+                        // inner bumps get additive ramps on both X ends
+                        lead_lo = (j == 0);                          // bevel -X end
+                        lead_hi = (j == rib_count - 1);              // bevel +X end
+                        inner   = (j > 0) && (j < rib_count - 1);
                         // lower-wall bump, protruding up (+Y) into the slot
                         cl = float ? (y_lo_face - (ylo - weld)) : 0;
-                        bump_solid(x, ylo - weld, y_lo_face, z0, cl, lead_lo, lead_hi);
+                        bump_solid(x, ylo - weld, y_lo_face, z0, cl,
+                                   lead_lo, lead_hi, inner, inner);
                         // upper-wall bump, protruding down (-Y) into the slot
                         cu = float ? ((yhi + weld) - y_hi_face) : 0;
-                        bump_solid(x, yhi + weld, y_hi_face, z0, cu, lead_lo, lead_hi);
+                        bump_solid(x, yhi + weld, y_hi_face, z0, cu,
+                                   lead_lo, lead_hi, inner, inner);
                     }
                 }
             }
