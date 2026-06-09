@@ -88,6 +88,28 @@ wall_vent_border = 15;  // solid border around each wall's edges (1.5cm)
 base_edge_border    = 5;  // solid border around all 4 base edges (mm)
 divider_base_extra  = 2;  // extra solid base on each side of the divider bottoms (mm)
 
+// ---------- Locating rim (screwless fit) ----------
+// A skirt hanging down off the base edge that wraps around the outside
+// of the fan body, so the caddy drops onto the fan and locates itself
+// without screws. (The corner screw holes are kept so it can still be
+// screwed down if desired.)
+rim_depth     = 5;    // how far the rim hangs below the base (0.5cm)
+rim_thickness = 3;    // wall thickness of the rim skirt (mm)
+rim_clearance = 0.4;  // gap between the rim's inner face and the fan, per side (mm)
+
+// ---------- Drive retainer bumps (screwless drive fit) ----------
+// Small bumps protrude inward from the wall faces to pinch each drive's
+// slot down close to the drive's actual thickness, holding the drives
+// without screws (the top clamp-band screw holes are kept for optional
+// use). Discrete bumps (not a solid rib) keep the airflow gaps open.
+// Drives are 20TB WD WD200EDGZ -> standard 26.1mm height (= drive_height).
+drive_tol  = 0.5;  // play left per side after the drive width -> 1mm total
+rib_count  = 5;    // number of bumps along each wall length
+rib_width  = 10;   // X width of each bump (1cm)
+rib_height = wall_vent_border;  // Z height of each bump = wall solid-border height
+lead_in    = 4;    // 45deg lead-in on the entry-end bumps, so drives slide in
+                   // from either X end without catching (set 0 to disable)
+
 /* [Visualization] */
 // Show translucent drive placeholders (GUI preview only; never exported)
 show_drives = true;        // [true, false]
@@ -115,6 +137,24 @@ function drive_hole_y(i) = drive_y(i) + drive_height/2 - side_hole_from_base;
 
 // Z of the band underside = top of the drives.
 band_z = base_thickness + drive_width;
+
+// Inner (slot-facing) Y face of the wall below / above drive i. The two
+// outer drives are bounded by a side wall on one side and a divider on the
+// other; the inner drives are bounded by dividers on both sides.
+function lower_wall_inner(i) = (i == 0)
+    ? -fan_size/2 + wall_thickness
+    : (drive_y(i) - drive_pitch/2) + divider_thickness/2;
+function upper_wall_inner(i) = (i == num_drives - 1)
+    ?  fan_size/2 - wall_thickness
+    : (drive_y(i) + drive_pitch/2) - divider_thickness/2;
+
+// Half the clamped slot opening: the drive half-width plus per-side play.
+half_slot = drive_height/2 + drive_tol;
+
+// X centers of the bumps along a wall: rib_count bumps evenly spaced,
+// the first and last flush with the wall ends.
+function rib_x(j) = -fan_size/2 + rib_width/2
+                    + j * (fan_size - rib_width) / (rib_count - 1);
 
 // Walls rise all the way up flush with the top of the bands, so the
 // whole caddy has a flat top. (The bands interpenetrate the walls
@@ -296,6 +336,89 @@ module dividers() {
     }
 }
 
+// One retainer bump, `rib_size` wide in X centered on `xc`. It spans Y from
+// the wall (`u_back`, overlapped into the wall) out to the gripping face
+// (`u_tip`), and Z from `z0` up by `rib_size`. With `cham > 0` the underside
+// is sloped 45deg from the wall-bottom up to the tip, so a bump that floats
+// over the open slot is self-supporting (no slicer supports needed). With
+// `cham = 0` the bump is a plain cube (used for the base-supported row).
+// `lead_lo` / `lead_hi` bevel the tip corner at the -X / +X end so a drive
+// sliding in from that end funnels into the rail instead of catching.
+module bump_solid(xc, u_back, u_tip, z0, cham, lead_lo = false, lead_hi = false) {
+    x_lo   = xc - rib_width/2;
+    x_hi   = xc + rib_width/2;
+    tipdir = (u_tip > u_back) ? 1 : -1;     // +1: tip is at larger Y (lower wall)
+    difference() {
+        translate([xc - rib_width/2, 0, 0])
+            rotate([90, 0, 90])             // map polygon (Y,Z) -> world, extrude along X
+                linear_extrude(rib_width)
+                    polygon([
+                        [u_back, z0 + rib_height], // back-top (into the wall)
+                        [u_tip,  z0 + rib_height], // tip-top
+                        [u_tip,  z0 + cham],       // tip: bottom of vertical grip face
+                        [u_back, z0]               // back-bottom: underside slopes to tip
+                    ]);
+        // lead-in: ramp the gripping face from flush with the wall (`u_back`)
+        // at the entry end up to full protrusion (`u_tip`) over `lead_in` in X,
+        // so the ramp starts exactly at the wall end (no flat dead zone).
+        if (lead_lo && lead_in > 0)
+            translate([0, 0, z0 - 1])
+                linear_extrude(rib_height + 2)
+                    polygon([[x_lo,           u_back],
+                             [x_lo - 1,        u_tip + tipdir],
+                             [x_lo + lead_in,  u_tip]]);
+        if (lead_hi && lead_in > 0)
+            translate([0, 0, z0 - 1])
+                linear_extrude(rib_height + 2)
+                    polygon([[x_hi,           u_back],
+                             [x_hi + 1,        u_tip + tipdir],
+                             [x_hi - lead_in,  u_tip]]);
+    }
+}
+
+// Square retainer bumps that pinch each drive slot down to the drive
+// thickness (plus `drive_tol` per side), so the drives stay put without
+// screws. Two rows per wall face -- one along the base, one at the drive
+// top -- of `rib_count` 1cm squares each. The square shape (vs a solid
+// rib) leaves the airflow gaps mostly open. Both faces of each divider
+// get bumps; the two side walls get bumps on their inner face only. The
+// top row floats over the slot, so its underside is chamfered 45deg; the
+// bottom row sits on the base and stays a full cube.
+module drive_retainers() {
+    weld = 0.6;                            // overlap into the wall so bumps fuse
+    // [z0 of row, does this row float (chamfer the underside)?]
+    rows = [ [base_thickness,        false],  // bottom row fills the lower border
+             [wall_top - rib_height, true ] ];// top row fills the upper border
+    intersection() {
+        union() {
+            for (i = [0 : num_drives - 1]) {
+                ylo       = lower_wall_inner(i);        // wall face below the slot
+                yhi       = upper_wall_inner(i);        // wall face above the slot
+                y_lo_face = drive_y(i) - half_slot;     // inner face of lower bumps
+                y_hi_face = drive_y(i) + half_slot;     // inner face of upper bumps
+                for (r = rows) {
+                    z0    = r[0];
+                    float = r[1];
+                    for (j = [0 : rib_count - 1]) {
+                        x = rib_x(j);
+                        // only the end bumps get a lead-in, on their outer end
+                        lead_lo = (j == 0);                 // bevel -X end
+                        lead_hi = (j == rib_count - 1);     // bevel +X end
+                        // lower-wall bump, protruding up (+Y) into the slot
+                        cl = float ? (y_lo_face - (ylo - weld)) : 0;
+                        bump_solid(x, ylo - weld, y_lo_face, z0, cl, lead_lo, lead_hi);
+                        // upper-wall bump, protruding down (-Y) into the slot
+                        cu = float ? ((yhi + weld) - y_hi_face) : 0;
+                        bump_solid(x, yhi + weld, y_hi_face, z0, cu, lead_lo, lead_hi);
+                    }
+                }
+            }
+        }
+        // clip to the base footprint so end bumps follow the rounded corners
+        rounded_plate(fan_size, wall_top, base_corner_r);
+    }
+}
+
 // One clamp band: a strip running across the top (full Y, clipped to
 // the base outline) and centered in X on the column `cx`. It carries
 // one countersunk screw hole per drive (countersunk from the top), so
@@ -319,6 +442,31 @@ module clamp_band(cx) {
 module clamp_bands() {
     clamp_band(side_hole_x1);
     clamp_band(side_hole_x2);
+}
+
+// A locating rim: a skirt that hangs `rim_depth` below the base and wraps
+// around the outside of the fan body so the caddy self-locates when set on
+// top of the fan. The hanging part is sized `rim_clearance` larger than the
+// fan; a thin band at the top is bored flush with the base edge so the rim
+// welds to the plate along a shared face (one solid print).
+module locating_rim() {
+    rim_weld = 0.6;                          // band welded flush to the base edge
+    outer    = fan_size + 2 * rim_thickness;
+    outer_r  = base_corner_r + rim_thickness;
+    fit      = fan_size + 2 * rim_clearance; // fan pocket: a touch larger than the fan
+    fit_r    = base_corner_r + rim_clearance;
+    difference() {
+        // skirt body: hangs below the base, plus a small band up into the
+        // base so it welds to the plate edge with a shared face.
+        translate([0, 0, -rim_depth])
+            rounded_plate(outer, rim_depth + rim_weld, outer_r);
+        // fan pocket (with clearance) through the hanging part of the skirt
+        translate([0, 0, -rim_depth - 1])
+            rounded_plate(fit, rim_depth + 1, fit_r);
+        // weld band: bore flush to the base edge so this band hugs the plate
+        translate([0, 0, -1])
+            rounded_plate(fan_size, 1 + rim_weld, base_corner_r);
+    }
 }
 
 // Translucent ghost drives, for visualizing the layout only
@@ -345,8 +493,10 @@ module caddy() {
     difference() {
         union() {
             perforated_base();
+            locating_rim();
             side_walls();
             dividers();
+            drive_retainers();
             clamp_bands();
         }
         fan_mount_holes();
@@ -361,3 +511,7 @@ if (show_drives) ghost_drives();
 echo(str("Air gap between drives: ", air_gap, " mm"));
 echo(str("Drive overhang per X end: ", (drive_length - fan_size)/2, " mm"));
 echo(str("Overall caddy height (flush top): ", wall_top, " mm"));
+echo(str("Rim hangs below base: ", rim_depth, " mm  -> total height ", wall_top + rim_depth, " mm"));
+echo(str("Rim outer footprint: ", fan_size + 2 * rim_thickness, " mm square"));
+echo(str("Clamped drive slot opening: ", drive_height + 2 * drive_tol,
+         " mm (drive ", drive_height, " + ", 2 * drive_tol, " play)"));
