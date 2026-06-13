@@ -88,14 +88,34 @@ wall_vent_border = 15;  // solid border around each wall's edges (1.5cm)
 base_edge_border    = 5;  // solid border around all 4 base edges (mm)
 divider_base_extra  = 2;  // extra solid base on each side of the divider bottoms (mm)
 
-// ---------- Locating rim (screwless fit) ----------
-// A skirt hanging down off the base edge that wraps around the outside
-// of the fan body, so the caddy drops onto the fan and locates itself
-// without screws. (The corner screw holes are kept so it can still be
-// screwed down if desired.)
-rim_depth     = 5;    // how far the rim hangs below the base (0.5cm)
-rim_thickness = 3;    // wall thickness of the rim skirt (mm)
-rim_clearance = 0.4;  // gap between the rim's inner face and the fan, per side (mm)
+// ---------- Two-piece split (print flat, no supports) ----------
+// The caddy prints as two parts so nothing needs slicer supports:
+//   (1) the MAIN piece (base + walls + bands + drive bumps) -- with NO
+//       downward rim, so it prints flat on the bed and sits directly on
+//       top of the fan;
+//   (2) a separate COLLAR that slides straight down over the outside,
+//       hooks onto rest tabs on the side walls, and continues down past
+//       the base to wrap the fan edges and keep the fan from shifting.
+part = "all";          // ["all", "main", "collar"]  which part(s) to emit
+
+// Rest tabs: gusseted shelves on the OUTSIDE of each side wall that the
+// collar's ledge lands on. The gusset slopes down to the bed so it prints
+// without support.
+tab_out    = 4;        // how far each tab sticks out past the wall (mm)
+tab_len    = 40;       // X length of each tab (mm)
+tab_height = 3;        // Z height of the flat resting top (mm)
+
+// Collar that wraps the fan and rests on the tabs.
+collar_clear = 0.2;    // gap between the collar inner face and the fan/base, per side (mm)
+collar_thick = 3;      // collar wall thickness (mm)
+collar_drop  = 5;      // how far the collar reaches below the base to wrap the fan (mm)
+collar_ledge = 3;      // height of the collar's resting ledge above the tab (mm)
+
+// Locking detents: thin ramps on the wall exteriors (one each side of each
+// rest tab) that the collar's lower ring snaps over and seats against, so it
+// stays put without being pried off accidentally.
+lock_out = 0.5;        // detent protrusion (mm)
+lock_len = 8;          // X length of each detent ramp (mm)
 
 // ---------- Drive retainer bumps (screwless drive fit) ----------
 // Small bumps protrude inward from the wall faces to pinch each drive's
@@ -112,7 +132,9 @@ lead_in    = 4;    // 45deg lead-in on the entry-end bumps, so drives slide in
 
 /* [Visualization] */
 // Show translucent drive placeholders (GUI preview only; never exported)
-show_drives = true;        // [true, false]
+show_drives = false;        // [true, false]
+// Show the collar in the "all" view (ignored when `part` selects a single part)
+show_collar = true;         // [true, false]
 
 // ============================================================
 // Derived values
@@ -161,6 +183,10 @@ function rib_x(j) = -fan_size/2 + rib_width/2
 // where they cross, fusing everything into one solid.)
 wall_top = band_z + band_thickness;
 
+// Z of the rest-tab top (= where the collar ledge lands). The 45deg gusset
+// under each tab rises from the base top, so the tab starts `tab_out` above it.
+rest_z = base_thickness + tab_out + tab_height;
+
 // ============================================================
 // Generic modules
 // ============================================================
@@ -173,6 +199,18 @@ module rounded_plate(size, thickness, corner_r) {
         hull()
             for (x = [-off, off], y = [-off, off])
                 translate([x, y]) circle(r = corner_r);
+}
+
+// A rounded-corner rectangular tube standing on the XY plane: an outer
+// rounded plate with a (slightly over-tall) inner rounded plate bored out,
+// spanning z = z0 .. z1.
+module rounded_tube(osz, orr, isz, irr, z0, z1) {
+    translate([0, 0, z0])
+        difference() {
+            rounded_plate(osz, z1 - z0, orr);
+            translate([0, 0, -1])
+                rounded_plate(isz, (z1 - z0) + 2, irr);
+        }
 }
 
 // A subtractable through-hole with a 90-degree countersink for a
@@ -475,28 +513,78 @@ module clamp_bands() {
     clamp_band(side_hole_x2);
 }
 
-// A locating rim: a skirt that hangs `rim_depth` below the base and wraps
-// around the outside of the fan body so the caddy self-locates when set on
-// top of the fan. The hanging part is sized `rim_clearance` larger than the
-// fan; a thin band at the top is bored flush with the base edge so the rim
-// welds to the plate along a shared face (one solid print).
-module locating_rim() {
-    rim_weld = 0.6;                          // band welded flush to the base edge
-    outer    = fan_size + 2 * rim_thickness;
-    outer_r  = base_corner_r + rim_thickness;
-    fit      = fan_size + 2 * rim_clearance; // fan pocket: a touch larger than the fan
-    fit_r    = base_corner_r + rim_clearance;
+// Rest tabs: a gusseted shelf on the OUTSIDE of each side wall. The collar's
+// ledge lands on the flat top (z = rest_z); the gusset underneath slopes all
+// the way down to the print bed (z = 0), so its underside stays well off
+// horizontal and the tab prints without support.
+module rest_tabs() {
+    for (sy = [-1, 1])
+        translate([-tab_len/2, 0, 0])
+            rotate([90, 0, 90])         // map polygon (Y,Z) -> world, extrude along X
+                linear_extrude(tab_len)
+                    polygon([
+                        [sy * (fan_size/2),           0],                 // wall foot, down at the bed
+                        [sy * (fan_size/2),           rest_z],             // wall, tab top
+                        [sy * (fan_size/2 + tab_out), rest_z],             // tip, top
+                        [sy * (fan_size/2 + tab_out), rest_z - tab_height] // tip, then sloped back down to the bed
+                    ]);
+}
+
+// Locking detents: a thin ramp on the OUTSIDE of each side wall, one on each
+// side of the rest tab (halfway out to the wall end), so four total. Each is a
+// `lock_out` rib running from the print bed up to the collar's seated top edge
+// (z = base_thickness) -- this rib is what the collar's lower ring seats snug
+// against -- then it slopes back flush over the wall's 1.5cm solid border. The
+// collar rides down over the shallow slopes with a little force; to remove it,
+// flex the collar out slightly and lift it back up over the ribs. The rib sits
+// on the bed and the slope recedes going up, so it prints without support.
+module lock_tabs() {
+    lx      = (tab_len/2 + fan_size/2) / 2;          // halfway: rest-tab edge -> wall end
+    z_catch = base_thickness;                        // collar's seated top edge
+    z_top   = base_thickness + wall_vent_border;     // top of the wall's solid border
+    for (sy = [-1, 1], sx = [-1, 1])
+        translate([sx * lx - lock_len/2, 0, 0])
+            rotate([90, 0, 90])         // map polygon (Y,Z) -> world, extrude along X
+                linear_extrude(lock_len)
+                    polygon([
+                        [sy * (fan_size/2),            0],        // wall/base edge at the bed
+                        [sy * (fan_size/2 + lock_out), 0],        // tip: sticks out at the bed
+                        [sy * (fan_size/2 + lock_out), z_catch],  // rib up to the catch (collar top)
+                        [sy * (fan_size/2),            z_top]     // 1.5cm slope back flush
+                    ]);
+}
+
+// The collar: a separate part that slides straight down over the outside of
+// the main piece. A low ring wraps the fan and the lower base edge all the
+// way around (gripping at the corners and the +/-X faces) to keep the fan
+// from sliding. On the +/-Y sides only it carries raised "goalpost" walls --
+// each has an open window that a wall's rest tab slides up through, capped by
+// a ledge that lands on the tab top. The +/-X sides stay low so the drives'
+// end overhang clears the collar.
+module collar() {
+    isz = fan_size + 2 * collar_clear;                 // inner: clears base/fan
+    osz = fan_size + 2 * (collar_clear + collar_thick);// outer
+    irr = base_corner_r + collar_clear;
+    orr = base_corner_r + collar_clear + collar_thick;
+    z_bot = -collar_drop;                  // wraps this far below the base
+    z_top = rest_z + collar_ledge;         // top of the resting ledge
+    rw    = tab_len + 12;                  // raised +/-Y wall length (tab + a post each side)
+    ww    = tab_len + 2;                   // window width (tab + a little play)
+    wy    = collar_thick + tab_out + 3;    // window depth (through the wall + past the tab tip)
     difference() {
-        // skirt body: hangs below the base, plus a small band up into the
-        // base so it welds to the plate edge with a shared face.
-        translate([0, 0, -rim_depth])
-            rounded_plate(outer, rim_depth + rim_weld, outer_r);
-        // fan pocket (with clearance) through the hanging part of the skirt
-        translate([0, 0, -rim_depth - 1])
-            rounded_plate(fit, rim_depth + 1, fit_r);
-        // weld band: bore flush to the base edge so this band hugs the plate
-        translate([0, 0, -1])
-            rounded_plate(fan_size, 1 + rim_weld, base_corner_r);
+        union() {
+            // low ring all around: wraps the fan and the lower base edge
+            rounded_tube(osz, orr, isz, irr, z_bot, base_thickness);
+            // raised walls on the +/-Y sides only, carrying the ledge
+            for (sy = [-1, 1])
+                translate([-rw/2, sy * isz/2 - (sy < 0 ? collar_thick : 0), base_thickness])
+                    cube([rw, collar_thick, z_top - base_thickness]);
+        }
+        // windows: open the +/-Y walls (ring + raised) from below up to the
+        // tab top, so each tab slides straight up and the ledge lands on it
+        for (sy = [-1, 1])
+            translate([-ww/2, sy * (fan_size/2 - 1) - (sy < 0 ? wy : 0), z_bot - 1])
+                cube([ww, wy, rest_z - (z_bot - 1)]);
     }
 }
 
@@ -518,31 +606,37 @@ module ghost_drives() {
 // Assembly
 // ============================================================
 
-// The entire caddy as one printed piece: base + side walls +
-// dividers + the two clamp bands, with the screw holes cut out.
-module caddy() {
+// The MAIN piece: base + side walls + dividers + drive bumps + the two clamp
+// bands + the rest tabs, with the screw holes and wall vents cut out. No rim,
+// so it prints flat on the bed.
+module main_piece() {
     difference() {
         union() {
             perforated_base();
-            locating_rim();
             side_walls();
             dividers();
             drive_retainers();
             clamp_bands();
+            rest_tabs();
+            lock_tabs();
         }
         fan_mount_holes();
         wall_honeycomb_cutter();
     }
 }
 
-caddy();
-if (show_drives) ghost_drives();
+if (part == "all" || part == "main")                  main_piece();
+if (part == "collar" || (part == "all" && show_collar)) collar();
+if (show_drives && part != "collar")                  ghost_drives();
 
 // Console report
 echo(str("Air gap between drives: ", air_gap, " mm"));
 echo(str("Drive overhang per X end: ", (drive_length - fan_size)/2, " mm"));
 echo(str("Overall caddy height (flush top): ", wall_top, " mm"));
-echo(str("Rim hangs below base: ", rim_depth, " mm  -> total height ", wall_top + rim_depth, " mm"));
-echo(str("Rim outer footprint: ", fan_size + 2 * rim_thickness, " mm square"));
+echo(str("Collar reaches below base: ", collar_drop, " mm  -> assembled height ",
+         wall_top + collar_drop, " mm"));
+echo(str("Rest-tab top (collar ledge lands here): z = ", rest_z, " mm"));
+echo(str("Collar outer footprint: ", fan_size + 2 * (collar_clear + collar_thick),
+         " mm square (tabs reach ", fan_size + 2 * tab_out, " mm)"));
 echo(str("Clamped drive slot opening: ", drive_height + 2 * drive_tol,
          " mm (drive ", drive_height, " + ", 2 * drive_tol, " play)"));
