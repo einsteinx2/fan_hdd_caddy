@@ -106,7 +106,7 @@ tab_len    = 40;       // X length of each tab (mm)
 tab_height = 3;        // Z height of the flat resting top (mm)
 
 // Collar that wraps the fan and rests on the tabs.
-collar_clear = 0.2;    // gap between the collar inner face and the fan/base, per side (mm)
+collar_clear = 0.4;    // gap between the collar inner face and the fan/base, per side (mm)
 collar_thick = 3;      // collar wall thickness (mm)
 collar_drop  = 5;      // how far the collar reaches below the base to wrap the fan (mm)
 collar_ledge = 3;      // height of the collar's resting ledge above the tab (mm)
@@ -114,8 +114,12 @@ collar_ledge = 3;      // height of the collar's resting ledge above the tab (mm
 // Locking detents: thin ramps on the wall exteriors (one each side of each
 // rest tab) that the collar's lower ring snaps over and seats against, so it
 // stays put without being pried off accidentally.
-lock_out = 0.5;        // detent protrusion (mm)
-lock_len = 8;          // X length of each detent ramp (mm)
+lock_out  = 0.7;       // detent protrusion (mm)
+lock_len  = 8;         // X length of each detent ramp (mm)
+lock_play = 0.2;       // vertical free lift before the catch bites (mm). The barb
+                       // base drops below the collar's seated top edge so its 45deg
+                       // face reaches the collar after only this much lift. Keep > 0
+                       // (a hair of play) rather than 0, but well under collar_clear.
 
 // ---------- Drive retainer bumps (screwless drive fit) ----------
 // Small bumps protrude inward from the wall faces to pinch each drive's
@@ -135,6 +139,8 @@ lead_in    = 4;    // 45deg lead-in on the entry-end bumps, so drives slide in
 show_drives = false;        // [true, false]
 // Show the collar in the "all" view (ignored when `part` selects a single part)
 show_collar = true;         // [true, false]
+// Show the main drive holder in the "all" view (turn off to see only the collar)
+show_main = true;           // [true, false]
 
 // ============================================================
 // Derived values
@@ -530,27 +536,33 @@ module rest_tabs() {
                     ]);
 }
 
-// Locking detents: a thin ramp on the OUTSIDE of each side wall, one on each
-// side of the rest tab (halfway out to the wall end), so four total. Each is a
-// `lock_out` rib running from the print bed up to the collar's seated top edge
-// (z = base_thickness) -- this rib is what the collar's lower ring seats snug
-// against -- then it slopes back flush over the wall's 1.5cm solid border. The
-// collar rides down over the shallow slopes with a little force; to remove it,
-// flex the collar out slightly and lift it back up over the ribs. The rib sits
-// on the bed and the slope recedes going up, so it prints without support.
+// Locking detents: a one-way snap on the OUTSIDE of each side wall, one on each
+// side of the rest tab (halfway out to the wall end), so four total. Each barb
+// overhangs the collar's seated top edge (z = base_thickness), reaching full
+// protrusion just above it. Its underside is a 45deg catch face (self-supporting in print)
+// and its top is a long gentle lead-in that fades flush at the solid-border
+// top. The collar's lower ring slides down the gentle lead-in with light force,
+// then springs in under the barb and seats RELAXED -- the wall below the barb
+// is flush, so nothing squeezes it. To pull the collar back off, its top edge
+// must climb the steep 45deg face (flexing out lock_out - collar_clear), which
+// is why removal takes deliberate force while insertion is easy. Prints without
+// support: the solid wall carries the barb base, the 45deg underside grows out
+// at exactly 45deg, and the lead-in recedes going up. The barb base sits
+// `collar_clear - lock_play` below the seated top edge, so the 45deg face meets
+// the collar's inner face after only `lock_play` of lift (the catch engagement).
 module lock_tabs() {
     lx      = (tab_len/2 + fan_size/2) / 2;          // halfway: rest-tab edge -> wall end
-    z_catch = base_thickness;                        // collar's seated top edge
-    z_top   = base_thickness + wall_vent_border;     // top of the wall's solid border
+    z_base  = base_thickness - (collar_clear - lock_play);  // barb base, dropped for tighter catch
+    z_tip   = z_base + lock_out;                     // tip height (45deg underside -> self-supporting)
+    z_top   = base_thickness + wall_vent_border;     // lead-in fades flush at the solid-border top
     for (sy = [-1, 1], sx = [-1, 1])
         translate([sx * lx - lock_len/2, 0, 0])
             rotate([90, 0, 90])         // map polygon (Y,Z) -> world, extrude along X
                 linear_extrude(lock_len)
                     polygon([
-                        [sy * (fan_size/2),            0],        // wall/base edge at the bed
-                        [sy * (fan_size/2 + lock_out), 0],        // tip: sticks out at the bed
-                        [sy * (fan_size/2 + lock_out), z_catch],  // rib up to the catch (collar top)
-                        [sy * (fan_size/2),            z_top]     // 1.5cm slope back flush
+                        [sy * (fan_size/2),            z_base],  // catch base, just below the collar top edge
+                        [sy * (fan_size/2 + lock_out), z_tip],   // tip: 45deg catch underside below it
+                        [sy * (fan_size/2),            z_top]    // gentle lead-in back flush (insertion)
                     ]);
 }
 
@@ -625,7 +637,7 @@ module main_piece() {
     }
 }
 
-if (part == "all" || part == "main")                  main_piece();
+if (part == "main" || (part == "all" && show_main))     main_piece();
 if (part == "collar" || (part == "all" && show_collar)) collar();
 if (show_drives && part != "collar")                  ghost_drives();
 
