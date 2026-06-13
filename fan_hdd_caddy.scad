@@ -138,7 +138,10 @@ lock_play = 0.2;       // vertical free lift before the catch bites (mm). The ba
 // without screws (the top clamp-band screw holes are kept for optional
 // use). Discrete bumps (not a solid rib) keep the airflow gaps open.
 // Drives are 20TB WD WD200EDGZ -> standard 26.1mm height (= drive_height).
-drive_tol  = 0.5;  // play left per side after the drive width -> 1mm total
+drive_tol  = 0.5;  // play left per side after the drive width -> 1mm total (Y)
+drive_z_play = 0.4;// vertical (Z) clearance above the drives: the band underside
+                   // and the notch floor sit this far above the drive top, so a
+                   // drive always drops in and the band always seats on the walls
 rib_count  = 4;    // number of bumps along each wall length
 rib_width  = 10;   // X width of each bump (1cm)
 rib_height = wall_vent_border;  // Z height of each bump = wall solid-border height
@@ -150,7 +153,7 @@ rib_inset  = 11;   // pull the whole bump field in this far from each wall end, 
 
 /* [Visualization] */
 // Show translucent drive placeholders (GUI preview only; never exported)
-show_drives = false;        // [true, false]
+show_drives = true;        // [true, false]
 // Show the collar in the "all" view (ignored when `part` selects a single part)
 show_collar = true;         // [true, false]
 // Show the main drive holder in the "all" view (turn off to see only the collar)
@@ -192,8 +195,10 @@ side_hole_x2 = side_hole_x1 + side_hole_spacing;        // far column
 // (+Y) edge. Same for the up- and down-facing holes.
 function drive_hole_y(i) = drive_y(i) + drive_height/2 - side_hole_from_base;
 
-// Z of the band underside = top of the drives.
-band_z = base_thickness + drive_width;
+// Top of a seated drive, and the band underside / notch floor `drive_z_play`
+// above it -- so the drive always drops in and the band seats on the walls.
+drive_top = base_thickness + drive_width;
+band_z    = drive_top + drive_z_play;
 
 // Inner (slot-facing) Y face of the wall below / above drive i. The two
 // outer drives are bounded by a side wall on one side and a divider on the
@@ -497,7 +502,7 @@ module drive_retainers() {
     // The top row is capped at the drive top (band_z) so it stops below the
     // separate clamp band that drops in there.
     rows = [ [base_thickness, rib_height,          false],   // bottom row fills the lower border
-             [top_z0,         band_z - top_z0,     true ] ]; // top row, capped at the drive top
+             [top_z0,         drive_top - top_z0,  true ] ]; // top row, capped at the drive top
     intersection() {
         union() {
             for (i = [0 : num_drives - 1]) {
@@ -723,3 +728,4 @@ echo(str("Collar outer footprint: ", fan_size + 2 * (collar_clear + collar_thick
          " mm square (tabs reach ", fan_size + 2 * tab_out, " mm)"));
 echo(str("Clamped drive slot opening: ", drive_height + 2 * drive_tol,
          " mm (drive ", drive_height, " + ", 2 * drive_tol, " play)"));
+echo(str("Vertical play above drives: ", drive_z_play, " mm (band/notch floor at z = ", band_z, ")"));
