@@ -112,9 +112,13 @@ part = "all";          // ["all", "main", "collar", "bands"]  which part(s) to e
 // Rest tabs: gusseted shelves on the OUTSIDE of each side wall that the
 // collar's ledge lands on. The gusset slopes down to the bed so it prints
 // without support.
-tab_out    = 4;        // how far each tab sticks out past the wall (mm)
-tab_len    = 40;       // X length of each tab (mm)
-tab_height = 3;        // Z height of the flat resting top (mm)
+tab_out     = 4;       // how far each tab sticks out past the wall (mm)
+tab_len     = 20;      // X width of each tab at its base (mm)
+tab_top_len = 6;       // X width of the short flat top the collar rests on (mm).
+                       // The tab tapers 45deg from tab_len down to this, and the
+                       // collar window matches, so the collar's ledge bridges only
+                       // this short span when printing (no long bridges).
+tab_height  = 3;       // Z height of the tab tip face (mm)
 
 // Collar that wraps the fan and rests on the tabs.
 collar_clear = 0.4;    // gap between the collar inner face and the fan/base, per side (mm)
@@ -583,21 +587,39 @@ module band_notches() {
             cube([band_width + 2 * band_play, fan_size + 2, wall_top - band_z + 1]);
 }
 
-// Rest tabs: a gusseted shelf on the OUTSIDE of each side wall. The collar's
-// ledge lands on the flat top (z = rest_z); the gusset underneath slopes all
-// the way down to the print bed (z = 0), so its underside stays well off
-// horizontal and the tab prints without support.
+// Rest tabs: a gusseted shelf on the OUTSIDE of each side wall that the collar's
+// ledge lands on. Two profiles combine: in Y-Z a gusset whose underside slopes
+// to the bed (so the tab prints without support); in X-Z a trapezoid that tapers
+// 45deg from `tab_len` at the base up to a short `tab_top_len` flat top -- so the
+// collar's matching ledge only has to bridge that short flat.
 module rest_tabs() {
+    chamf_z = rest_z - (tab_len - tab_top_len) / 2;   // where the 45deg X-chamfers begin
     for (sy = [-1, 1])
-        translate([-tab_len/2, 0, 0])
-            rotate([90, 0, 90])         // map polygon (Y,Z) -> world, extrude along X
-                linear_extrude(tab_len)
-                    polygon([
-                        [sy * (fan_size/2),           0],                 // wall foot, down at the bed
-                        [sy * (fan_size/2),           rest_z],             // wall, tab top
-                        [sy * (fan_size/2 + tab_out), rest_z],             // tip, top
-                        [sy * (fan_size/2 + tab_out), rest_z - tab_height] // tip, then sloped back down to the bed
-                    ]);
+        intersection() {
+            // Y-Z gusset prism, full tab_len wide in X
+            translate([-tab_len/2, 0, 0])
+                rotate([90, 0, 90])         // map polygon (Y,Z) -> world, extrude along X
+                    linear_extrude(tab_len)
+                        polygon([
+                            [sy * (fan_size/2),           0],                 // wall foot, at the bed
+                            [sy * (fan_size/2),           rest_z],             // wall, tab top
+                            [sy * (fan_size/2 + tab_out), rest_z],             // tip, top
+                            [sy * (fan_size/2 + tab_out), rest_z - tab_height] // tip, then sloped to the bed
+                        ]);
+            // X-Z trapezoid mask: full width to chamf_z, then 45deg in to the short
+            // top at rest_z (extruded across all Y; the prism trims it to the tab)
+            translate([0, 80, 0])
+                rotate([90, 0, 0])          // map polygon (X,Z) -> world, extrude along Y
+                    linear_extrude(160)
+                        polygon([
+                            [-tab_len/2,      -1],
+                            [ tab_len/2,      -1],
+                            [ tab_len/2,       chamf_z],
+                            [ tab_top_len/2,   rest_z],
+                            [-tab_top_len/2,   rest_z],
+                            [-tab_len/2,       chamf_z]
+                        ]);
+        }
 }
 
 // Locking detents: a one-way snap on the OUTSIDE of each side wall, one on each
@@ -645,22 +667,51 @@ module collar() {
     z_bot = -collar_drop;                  // wraps this far below the base
     z_top = rest_z + collar_ledge;         // top of the resting ledge
     rw    = tab_len + 12;                  // raised +/-Y wall length (tab + a post each side)
-    ww    = tab_len + 2;                   // window width (tab + a little play)
+    wb    = tab_len + 2;                   // window width at the base (tab + 1mm play/side)
+    wt    = tab_top_len + 2;               // window width at the top -> the ledge's bridge span
     wy    = collar_thick + tab_out + 3;    // window depth (through the wall + past the tab tip)
+    chamf_z = rest_z - (tab_len - tab_top_len) / 2;   // matches the rest-tab chamfer start
     difference() {
         union() {
             // low ring all around: wraps the fan and the lower base edge
             rounded_tube(osz, orr, isz, irr, z_bot, base_thickness);
-            // raised walls on the +/-Y sides only, carrying the ledge
+            // raised walls on the +/-Y sides only, carrying the ledge. The outer
+            // top corners are cut back at 45deg (parallel to the window trapezoid)
+            // to save plastic and look cleaner -- a line from each bottom-outer
+            // corner up to the top.
             for (sy = [-1, 1])
-                translate([-rw/2, sy * isz/2 - (sy < 0 ? collar_thick : 0), base_thickness])
-                    cube([rw, collar_thick, z_top - base_thickness]);
+                intersection() {
+                    translate([-rw/2, sy * isz/2 - (sy < 0 ? collar_thick : 0), base_thickness])
+                        cube([rw, collar_thick, z_top - base_thickness]);
+                    // X-Z trapezoid mask: full width at the base, 45deg in to the top
+                    translate([0, 80, 0])
+                        rotate([90, 0, 0])
+                            linear_extrude(160)
+                                polygon([
+                                    [-rw/2,  base_thickness - 1],
+                                    [ rw/2,  base_thickness - 1],
+                                    [ rw/2,  base_thickness],
+                                    [ rw/2 - (z_top - base_thickness),  z_top],
+                                    [-(rw/2 - (z_top - base_thickness)), z_top],
+                                    [-rw/2,  base_thickness]
+                                ]);
+                }
         }
-        // windows: open the +/-Y walls (ring + raised) from below up to the
-        // tab top, so each tab slides straight up and the ledge lands on it
-        for (sy = [-1, 1])
-            translate([-ww/2, sy * (fan_size/2 - 1) - (sy < 0 ? wy : 0), z_bot - 1])
-                cube([ww, wy, rest_z - (z_bot - 1)]);
+        // windows: open the +/-Y walls (ring + raised) from below up to the tab
+        // top, as a trapezoid matching the rest tab -- full width to chamf_z, then
+        // 45deg in to a short top, so the ledge only bridges `wt` and the sloped
+        // sides print without support.
+        for (sy = [-1, 1]) {
+            yb = sy * (fan_size/2 - 1) - (sy < 0 ? wy : 0);
+            // full-width part (through the ring and lower wall) up to the chamfer
+            translate([-wb/2, yb, z_bot - 1])
+                cube([wb, wy, chamf_z - (z_bot - 1)]);
+            // 45deg trapezoid from chamf_z up to the short top at rest_z
+            hull() {
+                translate([-wb/2, yb, chamf_z])         cube([wb, wy, 0.01]);
+                translate([-wt/2, yb, rest_z - 0.01])   cube([wt, wy, 0.01]);
+            }
+        }
     }
 }
 
