@@ -128,11 +128,14 @@ lock_play = 0.2;       // vertical free lift before the catch bites (mm). The ba
 // use). Discrete bumps (not a solid rib) keep the airflow gaps open.
 // Drives are 20TB WD WD200EDGZ -> standard 26.1mm height (= drive_height).
 drive_tol  = 0.5;  // play left per side after the drive width -> 1mm total
-rib_count  = 5;    // number of bumps along each wall length
+rib_count  = 4;    // number of bumps along each wall length
 rib_width  = 10;   // X width of each bump (1cm)
 rib_height = wall_vent_border;  // Z height of each bump = wall solid-border height
 lead_in    = 4;    // 45deg lead-in on the entry-end bumps, so drives slide in
                    // from either X end without catching (set 0 to disable)
+rib_inset  = 11;   // pull the whole bump field in this far from each wall end, so
+                   // the screw-adjacent end bumps clear the corner fan-screw
+                   // countersinks (which reach to within ~0.25mm of the walls)
 
 /* [Visualization] */
 // Show translucent drive placeholders (GUI preview only; never exported)
@@ -179,10 +182,11 @@ function upper_wall_inner(i) = (i == num_drives - 1)
 // Half the clamped slot opening: the drive half-width plus per-side play.
 half_slot = drive_height/2 + drive_tol;
 
-// X centers of the bumps along a wall: rib_count bumps evenly spaced,
-// the first and last flush with the wall ends.
-function rib_x(j) = -fan_size/2 + rib_width/2
-                    + j * (fan_size - rib_width) / (rib_count - 1);
+// X centers of the bumps along a wall: rib_count bumps evenly spaced, the
+// first and last inset `rib_inset` from the wall ends (so the end bumps clear
+// the corner fan-screw countersinks).
+function rib_x(j) = -fan_size/2 + rib_inset + rib_width/2
+                    + j * (fan_size - 2*rib_inset - rib_width) / (rib_count - 1);
 
 // Walls rise all the way up flush with the top of the bands, so the
 // whole caddy has a flat top. (The bands interpenetrate the walls
