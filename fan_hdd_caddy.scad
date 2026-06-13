@@ -64,13 +64,24 @@ wall_thickness = 3;            // Y thickness of each side wall (mm)
 divider_thickness = 3;         // Y thickness of each divider (mm)
 
 // ---------- Top clamp bands ----------
-// Two bands run across the top (Y direction) over the two columns
-// of drive side holes. Screws drop through the bands into the
-// drives' upward-facing side holes to clamp them down.
+// Two bands run across the top (Y direction) over the two columns of drive
+// side holes. They are SEPARATE pieces (so they print flat, with no bridges):
+// each drops into notches cut in the wall tops and rests on the drive tops --
+// pinned across its width by the notches, and along its length by end tabs that
+// drop past the outer side walls. Screw holes are kept so the drives can still
+// be clamped down with screws if desired.
 band_width      = 20;    // X width of each band (2cm)
 band_thickness  = 3;     // Z thickness of each band (mm)
 band_screw_d      = 3.8; // clearance hole for 6-32 screw shaft (mm)
 band_screw_head_d = 7.0; // flat-head diameter for countersink (mm)
+band_play   = 0.2;       // fit play: notch is this much wider per side, and the
+                         // end tabs sit this far off the outer walls (mm)
+drop_depth  = 5;         // how far the band's end tabs drop past the side walls (mm)
+band_slot   = 7;         // stretch the band screw holes into X slots this much
+                         // longer, so the screws still line up if the drives are
+                         // slid fore/aft (total adjustment range, mm). At 7 the
+                         // countersink spans 14mm of the 20mm band -> ~3mm of
+                         // solid material left on each side.
 
 // ---------- Airflow: honeycomb vents ----------
 // Hexagonal vent pattern cut through the base plate AND all the walls.
@@ -96,7 +107,7 @@ divider_base_extra  = 2;  // extra solid base on each side of the divider bottom
 //   (2) a separate COLLAR that slides straight down over the outside,
 //       hooks onto rest tabs on the side walls, and continues down past
 //       the base to wrap the fan edges and keep the fan from shifting.
-part = "all";          // ["all", "main", "collar"]  which part(s) to emit
+part = "all";          // ["all", "main", "collar", "bands"]  which part(s) to emit
 
 // Rest tabs: gusseted shelves on the OUTSIDE of each side wall that the
 // collar's ledge lands on. The gusset slopes down to the bed so it prints
@@ -144,6 +155,21 @@ show_drives = false;        // [true, false]
 show_collar = true;         // [true, false]
 // Show the main drive holder in the "all" view (turn off to see only the collar)
 show_main = true;           // [true, false]
+// Show the clamp bands in the "all" view (both bands at once)
+show_bands = true;          // [true, false]
+
+// Render a piece as a translucent gray "ghost" (the same % modifier the drive
+// placeholders use) instead of solid -- handy for seeing parts behind it.
+// NOTE: a ghosted piece is EXCLUDED from the F6 render / STL export, so turn
+// these off before exporting.
+clear_main   = false;       // [true, false]
+clear_collar = false;       // [true, false]
+clear_bands  = false;       // [true, false]
+
+// Per-piece colors (preview only; never exported). [R, G, B] 0..1.
+color_main   = [0.95, 0.84, 0.20];  // yellow
+color_collar = [0.95, 0.55, 0.30];  // warm orange
+color_bands  = [0.45, 0.74, 0.45];  // green
 
 // ============================================================
 // Derived values
@@ -223,21 +249,26 @@ module rounded_tube(osz, orr, isz, irr, z0, z1) {
         }
 }
 
-// A subtractable through-hole with a 90-degree countersink for a
-// flat-head screw. `top = true` opens the countersink on the top
-// face (+Z), `false` on the bottom face. Centered on the origin.
-module countersunk_hole(thickness, shaft_d, head_d, top = true) {
+// A subtractable through-hole with a 90-degree countersink for a flat-head
+// screw. `top = true` opens the countersink on the top face (+Z), `false` on
+// the bottom face. With `slot > 0` the hole (and its countersink) is stretched
+// into a rounded slot that much longer in the X direction, for fore/aft play.
+// Centered on the origin.
+module countersunk_hole(thickness, shaft_d, head_d, top = true, slot = 0) {
     cs_depth = (head_d - shaft_d) / 2;   // 90-degree included angle
-    // through shaft
-    translate([0, 0, -1])
-        cylinder(h = thickness + 2, d = shaft_d);
+    // through shaft (a rounded X slot when slot > 0, else a round hole)
+    hull() for (dx = [-slot/2, slot/2])
+        translate([dx, 0, -1])
+            cylinder(h = thickness + 2, d = shaft_d);
     // countersink cone (wide end flush with the chosen face)
     if (top)
-        translate([0, 0, thickness - cs_depth])
-            cylinder(h = cs_depth + 0.01, d1 = shaft_d, d2 = head_d);
+        hull() for (dx = [-slot/2, slot/2])
+            translate([dx, 0, thickness - cs_depth])
+                cylinder(h = cs_depth + 0.01, d1 = shaft_d, d2 = head_d);
     else
-        translate([0, 0, -0.01])
-            cylinder(h = cs_depth + 0.01, d1 = head_d, d2 = shaft_d);
+        hull() for (dx = [-slot/2, slot/2])
+            translate([dx, 0, -0.01])
+                cylinder(h = cs_depth + 0.01, d1 = head_d, d2 = shaft_d);
 }
 
 // ============================================================
@@ -384,15 +415,15 @@ module dividers() {
     }
 }
 
-// One retainer bump, `rib_size` wide in X centered on `xc`. It spans Y from
+// One retainer bump, `rib_width` wide in X centered on `xc`. It spans Y from
 // the wall (`u_back`, overlapped into the wall) out to the gripping face
-// (`u_tip`), and Z from `z0` up by `rib_size`. With `cham > 0` the underside
-// is sloped 45deg from the wall-bottom up to the tip, so a bump that floats
-// over the open slot is self-supporting (no slicer supports needed). With
+// (`u_tip`), and Z from `z0` up by `h`. With `cham > 0` the underside is
+// sloped 45deg from the wall-bottom up to the tip, so a bump that floats over
+// the open slot is self-supporting (no slicer supports needed). With
 // `cham = 0` the bump is a plain cube (used for the base-supported row).
 // `lead_lo` / `lead_hi` bevel the tip corner at the -X / +X end so a drive
 // sliding in from that end funnels into the rail instead of catching.
-module bump_solid(xc, u_back, u_tip, z0, cham,
+module bump_solid(xc, u_back, u_tip, z0, h, cham,
                   lead_lo = false, lead_hi = false,
                   ramp_lo = false, ramp_hi = false) {
     x_lo   = xc - rib_width/2;
@@ -405,10 +436,10 @@ module bump_solid(xc, u_back, u_tip, z0, cham,
                 rotate([90, 0, 90])         // map polygon (Y,Z) -> world, extrude along X
                     linear_extrude(rib_width)
                         polygon([
-                            [u_back, z0 + rib_height], // back-top (into the wall)
-                            [u_tip,  z0 + rib_height], // tip-top
-                            [u_tip,  z0 + cham],       // tip: bottom of vertical grip face
-                            [u_back, z0]               // back-bottom: underside slopes to tip
+                            [u_back, z0 + h],    // back-top (into the wall)
+                            [u_tip,  z0 + h],    // tip-top
+                            [u_tip,  z0 + cham], // tip: bottom of vertical grip face
+                            [u_back, z0]         // back-bottom: underside slopes to tip
                         ]);
             // side ramps: ADD a sloped lead-in extending OUT from an X-end face
             // (the bump keeps full size) so a drive sliding past doesn't catch
@@ -418,19 +449,19 @@ module bump_solid(xc, u_back, u_tip, z0, cham,
                 hull() {
                     translate([x_lo, 0, 0])
                         rotate([90, 0, 90]) linear_extrude(0.01)
-                            polygon([[u_back, z0 + rib_height], [u_tip, z0 + rib_height],
+                            polygon([[u_back, z0 + h], [u_tip, z0 + h],
                                      [u_tip, z0 + cham], [u_back, z0]]);
-                    translate([x_lo - lead_in, u_back, z0 + rib_height/2])
-                        cube([0.01, 0.02, rib_height], center = true);
+                    translate([x_lo - lead_in, u_back, z0 + h/2])
+                        cube([0.01, 0.02, h], center = true);
                 }
             if (ramp_hi)
                 hull() {
                     translate([x_hi - 0.01, 0, 0])
                         rotate([90, 0, 90]) linear_extrude(0.01)
-                            polygon([[u_back, z0 + rib_height], [u_tip, z0 + rib_height],
+                            polygon([[u_back, z0 + h], [u_tip, z0 + h],
                                      [u_tip, z0 + cham], [u_back, z0]]);
-                    translate([x_hi + lead_in, u_back, z0 + rib_height/2])
-                        cube([0.01, 0.02, rib_height], center = true);
+                    translate([x_hi + lead_in, u_back, z0 + h/2])
+                        cube([0.01, 0.02, h], center = true);
                 }
         }
         // lead-in: ramp the gripping face from flush with the wall (`u_back`)
@@ -438,13 +469,13 @@ module bump_solid(xc, u_back, u_tip, z0, cham,
         // so the ramp starts exactly at the wall end (no flat dead zone).
         if (lead_lo && lead_in > 0)
             translate([0, 0, z0 - 1])
-                linear_extrude(rib_height + 2)
+                linear_extrude(h + 2)
                     polygon([[x_lo,           u_back],
                              [x_lo - 1,        u_tip + tipdir],
                              [x_lo + lead_in,  u_tip]]);
         if (lead_hi && lead_in > 0)
             translate([0, 0, z0 - 1])
-                linear_extrude(rib_height + 2)
+                linear_extrude(h + 2)
                     polygon([[x_hi,           u_back],
                              [x_hi + 1,        u_tip + tipdir],
                              [x_hi - lead_in,  u_tip]]);
@@ -460,10 +491,13 @@ module bump_solid(xc, u_back, u_tip, z0, cham,
 // top row floats over the slot, so its underside is chamfered 45deg; the
 // bottom row sits on the base and stays a full cube.
 module drive_retainers() {
-    weld = 0.6;                            // overlap into the wall so bumps fuse
-    // [z0 of row, does this row float (chamfer the underside)?]
-    rows = [ [base_thickness,        false],  // bottom row fills the lower border
-             [wall_top - rib_height, true ] ];// top row fills the upper border
+    weld   = 0.6;                          // overlap into the wall so bumps fuse
+    top_z0 = wall_top - rib_height;        // top row still starts in the upper border
+    // [z0 of row, row height, does this row float (chamfer the underside)?]
+    // The top row is capped at the drive top (band_z) so it stops below the
+    // separate clamp band that drops in there.
+    rows = [ [base_thickness, rib_height,          false],   // bottom row fills the lower border
+             [top_z0,         band_z - top_z0,     true ] ]; // top row, capped at the drive top
     intersection() {
         union() {
             for (i = [0 : num_drives - 1]) {
@@ -473,7 +507,8 @@ module drive_retainers() {
                 y_hi_face = drive_y(i) + half_slot;     // inner face of upper bumps
                 for (r = rows) {
                     z0    = r[0];
-                    float = r[1];
+                    h     = r[1];
+                    float = r[2];
                     for (j = [0 : rib_count - 1]) {
                         x = rib_x(j);
                         // end bumps get a cut-in lead-in on their outer end;
@@ -483,11 +518,11 @@ module drive_retainers() {
                         inner   = (j > 0) && (j < rib_count - 1);
                         // lower-wall bump, protruding up (+Y) into the slot
                         cl = float ? (y_lo_face - (ylo - weld)) : 0;
-                        bump_solid(x, ylo - weld, y_lo_face, z0, cl,
+                        bump_solid(x, ylo - weld, y_lo_face, z0, h, cl,
                                    lead_lo, lead_hi, inner, inner);
                         // upper-wall bump, protruding down (-Y) into the slot
                         cu = float ? ((yhi + weld) - y_hi_face) : 0;
-                        bump_solid(x, yhi + weld, y_hi_face, z0, cu,
+                        bump_solid(x, yhi + weld, y_hi_face, z0, h, cu,
                                    lead_lo, lead_hi, inner, inner);
                     }
                 }
@@ -498,29 +533,49 @@ module drive_retainers() {
     }
 }
 
-// One clamp band: a strip running across the top (full Y, clipped to
-// the base outline) and centered in X on the column `cx`. It carries
-// one countersunk screw hole per drive (countersunk from the top), so
-// screws clamp the drives down into their upward-facing side holes.
+// One clamp band: a separate strip centered in X on the column `cx`. Its flat
+// plate spans the drives (just past the side walls) and rests on the drive
+// tops, dropping into the wall notches that pin it across its width. At each
+// end it extends out to the collar's outer edge and drops `drop_depth` past the
+// side wall, hooking it to pin the band along its length. It carries one
+// countersunk screw hole per drive so the drives can still be screwed down.
 module clamp_band(cx) {
+    inner_y = fan_size/2 + band_play;                     // plate reaches just past the walls
+    outer_y = fan_size/2 + collar_clear + collar_thick;   // end tabs reach the collar's outer edge
     difference() {
-        intersection() {
-            translate([cx - band_width/2, -fan_size/2, band_z])
-                cube([band_width, fan_size, band_thickness]);
-            // clip to the base footprint so the ends follow the corners
-            rounded_plate(fan_size, band_z + band_thickness, base_corner_r);
+        union() {
+            // plate: rests on the drive tops / in the wall notches
+            translate([cx - band_width/2, -inner_y, band_z])
+                cube([band_width, 2 * inner_y, band_thickness]);
+            // end tabs: extend past each side wall and drop down to hook it
+            for (sy = [-1, 1])
+                translate([cx - band_width/2,
+                           sy < 0 ? -outer_y : inner_y,
+                           band_z - drop_depth])
+                    cube([band_width, outer_y - inner_y, drop_depth + band_thickness]);
         }
         for (i = [0 : num_drives - 1])
             translate([cx, drive_hole_y(i), band_z])
                 countersunk_hole(band_thickness, band_screw_d,
-                                 band_screw_head_d, top = true);
+                                 band_screw_head_d, top = true, slot = band_slot);
     }
 }
 
-// Both clamp bands (separate parts that drop on after the drives).
+// Both clamp bands (separate pieces that drop into the wall notches).
 module clamp_bands() {
     clamp_band(side_hole_x1);
     clamp_band(side_hole_x2);
+}
+
+// Notches cut in the wall tops where the bands cross, down to the drive top
+// (band_z), so each separate band drops in and seats on the drives. The notch
+// is `band_play` wider than the band per side; the full-height wall flanking it
+// pins the band across its width. Cut through the full Y depth so it notches
+// every wall (both side walls and all dividers) the band crosses.
+module band_notches() {
+    for (cx = [side_hole_x1, side_hole_x2])
+        translate([cx - band_width/2 - band_play, -fan_size/2 - 1, band_z])
+            cube([band_width + 2 * band_play, fan_size + 2, wall_top - band_z + 1]);
 }
 
 // Rest tabs: a gusseted shelf on the OUTSIDE of each side wall. The collar's
@@ -622,9 +677,9 @@ module ghost_drives() {
 // Assembly
 // ============================================================
 
-// The MAIN piece: base + side walls + dividers + drive bumps + the two clamp
-// bands + the rest tabs, with the screw holes and wall vents cut out. No rim,
-// so it prints flat on the bed.
+// The MAIN piece: base + side walls + dividers + drive bumps + rest tabs, with
+// the screw holes, wall vents, and band notches cut out. No rim and no clamp
+// bands (those are separate), so it prints flat on the bed with no top bridges.
 module main_piece() {
     difference() {
         union() {
@@ -632,18 +687,30 @@ module main_piece() {
             side_walls();
             dividers();
             drive_retainers();
-            clamp_bands();
             rest_tabs();
             lock_tabs();
         }
         fan_mount_holes();
         wall_honeycomb_cutter();
+        band_notches();
     }
 }
 
-if (part == "main" || (part == "all" && show_main))     main_piece();
-if (part == "collar" || (part == "all" && show_collar)) collar();
-if (show_drives && part != "collar")                  ghost_drives();
+// Emit a piece: hidden if !show; a translucent gray ghost (% modifier, like the
+// drive placeholders) when `clear`; otherwise solid in color `col`. A ghosted
+// piece is dropped from the F6 render / STL export, so disable `clear_*` before
+// exporting.
+module styled(show, clear, col) {
+    if (show) {
+        if (clear) %union() children();
+        else       color(col) children();
+    }
+}
+
+styled(part == "main"   || (part == "all" && show_main),   clear_main,   color_main)   main_piece();
+styled(part == "collar" || (part == "all" && show_collar), clear_collar, color_collar) collar();
+styled(part == "bands"  || (part == "all" && show_bands),  clear_bands,  color_bands)  clamp_bands();
+if (show_drives && part != "collar" && part != "bands") ghost_drives();
 
 // Console report
 echo(str("Air gap between drives: ", air_gap, " mm"));
