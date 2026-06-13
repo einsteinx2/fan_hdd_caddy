@@ -25,7 +25,15 @@ $fn = 64;                 // smoothness of curves/holes
 // ---------- Fan / base parameters ----------
 fan_size        = 140;    // 140mm fan: 140 x 140 mm body
 base_thickness  = 3;      // thickness of the base plate (mm)
-base_corner_r   = 7;      // rounded corner radius of the base (mm)
+// Corner radius of the base / walls / collar. This should match the FAN's
+// own corner radius. Left at 0 (fully square) so the caddy fits ANY 140mm
+// fan: a square base covers a fan with rounded corners, and the collar's
+// inner profile (derived as base_corner_r + collar_clear) becomes a Minkowski
+// clearance offset whose corner arc is centered on the fan's square corner --
+// it clears a fully-square fan and gives even more room at any rounded corner.
+// Bump this up to your fan's actual corner radius if you want a snugger,
+// corner-gripping fit for one specific fan (at the cost of universal fit).
+base_corner_r   = 0;      // corner radius of base/walls/collar (mm); 0 = square = fits any fan
 
 // ---------- Fan mounting screw parameters ----------
 // Standard 140mm fan mounting holes are 124.5mm apart (7.5mm
@@ -53,7 +61,7 @@ num_drives = 4;            // number of drives across the base
 // Two outer walls that bookend the drive row: one against the
 // outer face of the first drive, one against the outer face of
 // the last drive.
-wall_thickness = 3;            // Y thickness of each side wall (mm)
+wall_thickness = 2;            // Y thickness of each side wall (mm)
 // (Wall height is derived: all walls rise flush with the band tops --
 //  see `wall_top` in the derived-values section.)
 
@@ -61,7 +69,7 @@ wall_thickness = 3;            // Y thickness of each side wall (mm)
 // Walls between adjacent drives. They run the full length of the
 // base and the full wall height, giving the clamp bands something
 // to land on so the whole caddy prints as one piece.
-divider_thickness = 3;         // Y thickness of each divider (mm)
+divider_thickness = 2;         // Y thickness of each divider (mm)
 
 // ---------- Top clamp bands ----------
 // Two bands run across the top (Y direction) over the two columns of drive
@@ -71,7 +79,7 @@ divider_thickness = 3;         // Y thickness of each divider (mm)
 // drop past the outer side walls. Screw holes are kept so the drives can still
 // be clamped down with screws if desired.
 band_width      = 20;    // X width of each band (2cm)
-band_thickness  = 3;     // Z thickness of each band (mm)
+band_thickness  = 2;     // Z thickness of each band (mm)
 band_screw_d      = 3.8; // clearance hole for 6-32 screw shaft (mm)
 band_screw_head_d = 7.0; // flat-head diameter for countersink (mm)
 band_play   = 0.2;       // fit play: notch is this much wider per side, and the
@@ -83,17 +91,34 @@ band_slot   = 7;         // stretch the band screw holes into X slots this much
                          // countersink spans 14mm of the 20mm band -> ~3mm of
                          // solid material left on each side.
 
+// Lightening + airflow cutouts: open up the whole band between the screw pads and
+// the end seats. What stays solid: a pad around each of the 4 screw holes, a seat
+// at each Y end (sits on the outer wall notch), and a rail on each X edge running
+// the band's length (so it still seats in every notch). The cutouts over the air
+// gaps double as vents so the fan's air exits up through the band.
+band_vent_margin = 3;  // solid band kept on each X edge (the seating rails) (mm)
+band_pad_margin  = 2;  // extra solid around each screw hole, beyond the head radius (mm)
+band_end_seat    = 6;  // solid band kept at each Y end, for the outer-wall notch (mm)
+band_vent_r      = 2;  // rounded-corner radius of each cutout (mm)
+
 // ---------- Airflow: honeycomb vents ----------
 // Hexagonal vent pattern cut through the base plate AND all the walls.
-// `hex_size` is the clear opening across the flats of each hole;
-// `hex_wall` is the strut thickness left between holes. On the base, a
-// solid square is kept around each corner screw and solid strips are
-// kept under the walls. On the walls, a solid border is kept around
-// every edge.
-hex_size         = 10;  // flat-to-flat opening of each hex hole (mm)
-hex_wall         = 2;   // strut thickness between holes (mm)
+// The base and the walls are tuned independently:
+//   * BASE vents optimize for AIRFLOW (it sits directly on the fan) ->
+//     big holes, thin struts, ~80% open. Flat-top hexes are fine here:
+//     base holes are vertical through-holes, so hole shape never bridges.
+//   * WALL vents optimize for PRINT TIME (they are NOT for cooling) ->
+//     a few large "pointy-top" hexes, so each layer is a handful of long
+//     fast moves instead of many tiny ones, while the peaked roofs stay
+//     self-supporting.
+// On the base, a solid square is kept around each corner screw and solid
+// strips under the walls; on the walls, a solid border is kept on every edge.
+base_hex_size    = 18;  // base hole flat-to-flat opening (mm) -> ~80% open for airflow
+base_hex_wall    = 2;   // base strut thickness between holes (mm)
+wall_hex_size    = 30;  // wall hole flat-to-flat opening (mm) -> big & sparse for speed
+wall_hex_wall    = 3;   // wall strut thickness between holes (mm) -> few, sturdy struts
 corner_square    = 15;  // solid square around each corner screw (1.5cm)
-wall_vent_border = 15;  // solid border around each wall's edges (1.5cm)
+wall_vent_border = 10;  // solid border around each wall's edges (1cm); also = rib_height
 
 // Base reinforcement: keep extra solid material (no honeycomb) here.
 base_edge_border    = 5;  // solid border around all 4 base edges (mm)
@@ -121,7 +146,7 @@ export_layout = false;                 // [true, false]
 // Rest tabs: gusseted shelves on the OUTSIDE of each side wall that the
 // collar's ledge lands on. The gusset slopes down to the bed so it prints
 // without support.
-tab_out     = 4;       // how far each tab sticks out past the wall (mm)
+tab_out     = 2;       // how far each tab sticks out past the wall (mm)
 tab_len     = 20;      // X width of each tab at its base (mm)
 tab_top_len = 6;       // X width of the short flat top the collar rests on (mm).
                        // The tab tapers 45deg from tab_len down to this, and the
@@ -131,7 +156,7 @@ tab_height  = 3;       // Z height of the tab tip face (mm)
 
 // Collar that wraps the fan and rests on the tabs.
 collar_clear = 0.4;    // gap between the collar inner face and the fan/base, per side (mm)
-collar_thick = 3;      // collar wall thickness (mm)
+collar_thick = 2;      // collar wall thickness (mm)
 collar_drop  = 5;      // how far the collar reaches below the base to wrap the fan (mm)
 collar_ledge = 3;      // height of the collar's resting ledge above the tab (mm)
 
@@ -246,13 +271,19 @@ rest_z = base_thickness + tab_out + tab_height;
 // ============================================================
 
 // Rounded-corner rectangular plate, centered on origin, sitting
-// on the XY plane (bottom at z = 0).
+// on the XY plane (bottom at z = 0). With corner_r <= 0 it degrades to
+// a plain square (a zero-radius circle is degenerate and would empty the
+// hull), so the whole design can be squared off for universal fan fit.
 module rounded_plate(size, thickness, corner_r) {
-    off = size / 2 - corner_r;
     linear_extrude(height = thickness)
-        hull()
-            for (x = [-off, off], y = [-off, off])
-                translate([x, y]) circle(r = corner_r);
+        if (corner_r > 0) {
+            off = size / 2 - corner_r;
+            hull()
+                for (x = [-off, off], y = [-off, off])
+                    translate([x, y]) circle(r = corner_r);
+        } else {
+            square(size, center = true);
+        }
 }
 
 // A rounded-corner rectangular tube standing on the XY plane: an outer
@@ -293,24 +324,40 @@ module countersunk_hole(thickness, shaft_d, head_d, top = true, slot = 0) {
 // Caddy modules
 // ============================================================
 
-// A 2D honeycomb hole field filling a centered (w x h) rectangle. The
-// lattice is sized so the struts left between holes are exactly
-// `hex_wall` thick; holes are clipped to the rectangle so its border
-// is left solid.
-module honeycomb_panel_2d(w, h) {
-    S      = hex_size + hex_wall;   // center-to-center (all 6 neighbors)
-    r_hole = hex_size / sqrt(3);    // circumradius of each hex hole
-    dx     = S * sqrt(3) / 2;       // column pitch
-    dy     = S;                     // row pitch within a column
-    nx = ceil((w/2) / dx) + 1;
-    ny = ceil((h/2) / dy) + 1;
+// A 2D honeycomb hole field filling a centered (w x h) rectangle, sized so the
+// struts left between holes are exactly `hw` thick (each hole is `hs` across the
+// flats) and clipped to the rectangle so its border stays solid. `pointy = false`
+// gives flat-top hexes (used for the base, where the holes go straight through
+// so their shape never bridges); `pointy = true` gives pointy-top hexes whose
+// peaked roofs stay self-supporting when the panel stands up as a wall vent.
+module honeycomb_panel_2d(w, h, hs, hw, pointy = false) {
+    S      = hs + hw;            // center-to-center spacing (all 6 neighbors)
+    r_hole = hs / sqrt(3);       // circumradius of each hex hole
+    pitch  = S * sqrt(3) / 2;    // row/column pitch across the flats
     intersection() {
         square([w, h], center = true);
-        for (col = [-nx : nx]) {
-            x = col * dx;
-            y_off = (col % 2 == 0) ? 0 : dy/2;   // stagger alternate columns
-            for (row = [-ny : ny])
-                translate([x, row*dy + y_off]) circle(r = r_hole, $fn = 6);
+        if (pointy) {
+            // pointy-top hexes: rows stacked in Y (pitch apart), hexes spaced S
+            // along X within a row, alternate rows offset S/2 -> peaked roofs.
+            ny = ceil((h/2) / pitch) + 1;
+            nx = ceil((w/2) / S) + 1;
+            for (r = [-ny : ny]) {
+                x_off = (r % 2 == 0) ? 0 : S/2;
+                for (c = [-nx : nx])
+                    translate([c*S + x_off, r*pitch])
+                        rotate(30) circle(r = r_hole, $fn = 6);
+            }
+        } else {
+            // flat-top hexes: columns spaced in X (pitch apart), hexes spaced S
+            // along Y within a column, alternate columns offset S/2.
+            nx = ceil((w/2) / pitch) + 1;
+            ny = ceil((h/2) / S) + 1;
+            for (c = [-nx : nx]) {
+                y_off = (c % 2 == 0) ? 0 : S/2;
+                for (r = [-ny : ny])
+                    translate([c*pitch, r*S + y_off])
+                        circle(r = r_hole, $fn = 6);
+            }
         }
     }
 }
@@ -322,7 +369,7 @@ module honeycomb_holes(thickness) {
     inner = fan_size - 2 * base_edge_border;
     translate([0, 0, -1])
         linear_extrude(height = thickness + 2)
-            honeycomb_panel_2d(inner, inner);
+            honeycomb_panel_2d(inner, inner, base_hex_size, base_hex_wall);
 }
 
 // Honeycomb vent cutter for the walls: a hex field in the X-Z plane,
@@ -337,7 +384,7 @@ module wall_honeycomb_cutter() {
     translate([0, depth/2, zc])
         rotate([90, 0, 0])
             linear_extrude(height = depth)
-                honeycomb_panel_2d(inner_w, inner_h);
+                honeycomb_panel_2d(inner_w, inner_h, wall_hex_size, wall_hex_wall, pointy = true);
 }
 
 // Solid keep-out squares centered on each corner screw, so the
@@ -576,6 +623,24 @@ module clamp_band(cx) {
             translate([cx, drive_hole_y(i), band_z])
                 countersunk_hole(band_thickness, band_screw_d,
                                  band_screw_head_d, top = true, slot = band_slot);
+        // lightening + airflow cutouts: a rounded slot in every gap between the
+        // screw pads (and between each end seat and the outer screw), so only the
+        // pads, the end seats, and the two X-edge rails are left solid.
+        vw   = band_width - 2 * band_vent_margin;          // X opening width
+        pad  = band_screw_head_d / 2 + band_pad_margin;    // Y solid kept around each screw
+        scr  = [ for (i = [0 : num_drives - 1]) drive_hole_y(i) ];   // screw Ys (ascending)
+        cuts = concat(
+            [ [ -inner_y + band_end_seat, scr[0] - pad ] ],                      // -Y end span
+            [ for (i = [0 : num_drives - 2]) [ scr[i] + pad, scr[i + 1] - pad ] ], // between screws
+            [ [ scr[num_drives - 1] + pad, inner_y - band_end_seat ] ]           // +Y end span
+        );
+        for (c = cuts)
+            if (c[1] - c[0] > 2 * band_vent_r)             // skip slivers too small to round
+                translate([cx, (c[0] + c[1]) / 2, band_z - 1])
+                    linear_extrude(band_thickness + 2)
+                        offset(r = band_vent_r)
+                            square([ vw - 2 * band_vent_r,
+                                     (c[1] - c[0]) - 2 * band_vent_r ], center = true);
     }
 }
 
@@ -663,8 +728,10 @@ module lock_tabs() {
 
 // The collar: a separate part that slides straight down over the outside of
 // the main piece. A low ring wraps the fan and the lower base edge all the
-// way around (gripping at the corners and the +/-X faces) to keep the fan
-// from sliding. On the +/-Y sides only it carries raised "goalpost" walls --
+// way around to keep the fan from sliding. With a square base (base_corner_r
+// = 0) it grips on the flat +/-X faces, with the corners left clear so any
+// fan corner radius fits; raise base_corner_r to a fan's actual radius to add
+// a snug corner grip too. On the +/-Y sides only it carries raised "goalpost" walls --
 // each has an open window that a wall's rest tab slides up through, capped by
 // a ledge that lands on the tab top. The +/-X sides stay low so the drives'
 // end overhang clears the collar.
