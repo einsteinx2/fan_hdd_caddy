@@ -109,6 +109,15 @@ divider_base_extra  = 2;  // extra solid base on each side of the divider bottom
 //       the base to wrap the fan edges and keep the fan from shifting.
 part = "all";          // ["all", "main", "collar", "bands"]  which part(s) to emit
 
+// ---------- Export orientation (print-ready) ----------
+// When exporting for the slicer, `export_layout` flips the bands flat-plate-down
+// (hook tabs pointing up) and seats them on z = 0 -- their support-free print
+// orientation. export.sh turns this on for every export; it stays off for the
+// assembled "all" preview. No X/Y spacing is applied: Bambu Studio re-centers
+// each loaded file on the plate, so spacing parts here has no effect -- use the
+// slicer's Arrange to lay multiple parts out.
+export_layout = false;                 // [true, false]
+
 // Rest tabs: gusseted shelves on the OUTSIDE of each side wall that the
 // collar's ledge lands on. The gusset slopes down to the bed so it prints
 // without support.
@@ -763,9 +772,16 @@ module styled(show, clear, col) {
     }
 }
 
-styled(part == "main"   || (part == "all" && show_main),   clear_main,   color_main)   main_piece();
-styled(part == "collar" || (part == "all" && show_collar), clear_collar, color_collar) collar();
-styled(part == "bands"  || (part == "all" && show_bands),  clear_bands,  color_bands)  clamp_bands();
+styled(part == "main"   || (part == "all" && show_main),   clear_main,   color_main)
+    main_piece();
+styled(part == "collar" || (part == "all" && show_collar), clear_collar, color_collar)
+    collar();
+styled(part == "bands"  || (part == "all" && show_bands),  clear_bands,  color_bands)
+    if (export_layout)
+        // flip flat-plate-down and seat on the bed (support-free print orientation)
+        translate([0, 0, band_z + band_thickness]) rotate([180, 0, 0]) clamp_bands();
+    else
+        clamp_bands();
 if (show_drives && part != "collar" && part != "bands") ghost_drives();
 
 // Console report

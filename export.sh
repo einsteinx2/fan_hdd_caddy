@@ -69,7 +69,8 @@ for part in "${PARTS[@]}"; do
     for ext in "${FORMATS[@]}"; do
         out="$OUT_DIR/fan_hdd_caddy_${part}_${STAMP_DATE}_${STAMP_TIME}_OpenSCAD-${VER}.${ext}"
         printf '  exporting %-7s %-3s -> %s\n' "$part" "$ext" "$out"
-        "$OPENSCAD" -o "$out" -D "part=\"$part\"" "$SCAD" 2>/dev/null
+        # export_layout=true: bands flipped flat-plate-down (support-free orientation).
+        "$OPENSCAD" -o "$out" -D "part=\"$part\"" -D export_layout=true "$SCAD" 2>/dev/null
         count=$((count + 1))
     done
 done
