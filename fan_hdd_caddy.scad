@@ -15,7 +15,8 @@
 // slicer supports under them.
 //
 // Assembly order: (1) screw the caddy down through the 4 corner
-// holes, through the case top, into the fan; (2) slide each drive
+// holes (a long driver reaches them through the relief in each top
+// strip), through the case top, into the fan; (2) slide each drive
 // in from the open -X (connector) end until it meets the back
 // wall; (3) screw down through the top strips into the drives'
 // upward-facing side holes.
@@ -45,6 +46,11 @@ base_chamfer    = 2;      // bottom edge chamfer (mm)
 fan_screw_spacing = 124.5;  // center-to-center, both X and Y (mm)
 fan_screw_d       = 4.5;    // clearance hole for fan screw shaft (mm)
 fan_screw_head_d  = 9.0;    // flat-head diameter for countersink (mm)
+// The top strips overhang the corner screws in plan view, and the back wall
+// stands right behind the +X pair, so a driver could not reach them from
+// above. Each strip gets a round relief above each corner screw this wide,
+// so the screw head and the driver shaft pass straight down.
+fan_screw_access_d = fan_screw_head_d + 2;  // driver access hole through the strips (mm)
 
 // ---------- 3.5" HDD parameters (SFF-8301) ----------
 drive_length      = 147.0;  // A2 - drive length
@@ -160,6 +166,17 @@ drive_x_back  = fan_size/2 - back_wall_thickness;      // drive back face rests 
 drive_x_front = drive_x_back - drive_length;           // connector end (-X)
 side_hole_x1  = drive_x_front + side_hole_from_conn;   // near (connector) column
 side_hole_x2  = side_hole_x1 + side_hole_spacing;      // far column
+
+// The driver access relief in each strip must not break into the countersink
+// of the neighbouring drive screw (at the +Y end the last drive's screw and
+// the corner screw share a Y range). Solid left between the relief edge and
+// the countersink edge, per strip:
+access_gap_x1 = abs(fan_screw_spacing/2 - abs(side_hole_x1))
+                - fan_screw_access_d/2 - (band_slot + band_screw_head_d)/2;
+access_gap_x2 = abs(fan_screw_spacing/2 - abs(side_hole_x2))
+                - fan_screw_access_d/2 - (band_slot + band_screw_head_d)/2;
+assert(access_gap_x1 > 0, "fan_screw_access_d breaks into the drive screw countersink on the -X strip");
+assert(access_gap_x2 > 0, "fan_screw_access_d breaks into the drive screw countersink on the +X strip");
 
 // Y of a drive's side hole: offset in from its baseplate-facing
 // (+Y) edge. Same for the up- and down-facing holes.
@@ -456,13 +473,26 @@ module top_strip(cx) {
     }
 }
 
-// Both top strips, one over each side-hole column, clipped to the base
-// footprint so they follow its corners.
+// Driver access relief: a round hole through the strip Z range above each
+// corner fan screw. Cut from the strips ONLY (walls and pads are untouched),
+// so the screw head and driver pass straight down from the top.
+module fan_screw_access_cutter() {
+    off = fan_screw_spacing / 2;
+    for (x = [-off, off], y = [-off, off])
+        translate([x, y, band_z - 1])
+            cylinder(h = band_thickness + 2, d = fan_screw_access_d);
+}
+
+// Both top strips, one over each side-hole column, relieved above the corner
+// fan screws and clipped to the base footprint so they follow its corners.
 module top_strips() {
     intersection() {
-        union() {
-            top_strip(side_hole_x1);
-            top_strip(side_hole_x2);
+        difference() {
+            union() {
+                top_strip(side_hole_x1);
+                top_strip(side_hole_x2);
+            }
+            fan_screw_access_cutter();
         }
         rounded_plate(fan_size, wall_top, base_corner_r);
     }
@@ -518,3 +548,8 @@ echo(str("Overall caddy height (flush top): ", wall_top, " mm"));
 echo(str("Bottom edge chamfer: ", base_chamfer, " mm (bottom face ",
          fan_size - 2 * base_chamfer, " mm square)"));
 echo(str("Vertical play above drives: ", drive_z_play, " mm (strip underside at z = ", band_z, ")"));
+echo(str("Corner screw driver access: ", fan_screw_access_d, " mm hole in the strips; ",
+         "solid left to the drive screw countersink: ", access_gap_x1, " mm (-X strip), ",
+         access_gap_x2, " mm (+X strip); relief edge sits ",
+         drive_x_back - fan_screw_spacing/2 - fan_screw_access_d/2,
+         " mm inside the back wall inner face"));
