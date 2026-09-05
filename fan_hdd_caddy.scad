@@ -115,10 +115,10 @@ band_slot   = 2;         // stretch the strip screw holes into X slots this much
 //     self-supporting.
 // On the base, a solid square is kept around each corner screw and solid
 // strips under the walls; on the walls, a solid border is kept on every edge.
-base_hex_size    = 18;  // base hole flat-to-flat opening (mm) -> ~80% open for airflow
-base_hex_wall    = 2;   // base strut thickness between holes (mm)
-wall_hex_size    = 30;  // wall hole flat-to-flat opening (mm) -> big & sparse for speed
+wall_hex_size    = 24;  // wall hole flat-to-flat opening (mm) -> big & sparse for speed
 wall_hex_wall    = 3;   // wall strut thickness between holes (mm) -> few, sturdy struts
+base_hex_size    = wall_hex_size;  // base hole opening (mm) -> same size as the wall holes
+base_hex_wall    = 2;   // base strut thickness between holes (mm) -> thinner, for airflow
 corner_square    = 15;  // solid square around each corner screw (1.5cm)
 wall_vent_border = 10;  // solid border around each wall's edges (1cm)
 
