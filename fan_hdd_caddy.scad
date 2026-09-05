@@ -62,6 +62,11 @@ side_hole_spacing   = 101.60; // A9 - distance between the 2 side holes
 side_hole_from_conn = 28.50;  // A8 - connector end to nearest side hole
 side_hole_from_base = 6.35;   // A10 - hole centerline above drive baseplate
 // (Drive side holes are 6-32 UNC.)
+// Which way each drive's PCB (baseplate / connector) face points across the
+// caddy: -1 = toward -Y, +1 = toward +Y. The side holes sit
+// `side_hole_from_base` in from that face, so this picks which side of the
+// drive centerline the strip screw holes land on.
+drive_pcb_side = -1;          // [-1, 1]
 
 // ---------- Drive layout ----------
 num_drives = 4;            // number of drives across the base
@@ -178,9 +183,9 @@ access_gap_x2 = abs(fan_screw_spacing/2 - abs(side_hole_x2))
 assert(access_gap_x1 > 0, "fan_screw_access_d breaks into the drive screw countersink on the -X strip");
 assert(access_gap_x2 > 0, "fan_screw_access_d breaks into the drive screw countersink on the +X strip");
 
-// Y of a drive's side hole: offset in from its baseplate-facing
-// (+Y) edge. Same for the up- and down-facing holes.
-function drive_hole_y(i) = drive_y(i) + drive_height/2 - side_hole_from_base;
+// Y of a drive's side hole: offset in from its PCB-facing edge (the
+// `drive_pcb_side` side). Same for the up- and down-facing holes.
+function drive_hole_y(i) = drive_y(i) + drive_pcb_side * (drive_height/2 - side_hole_from_base);
 
 // Top of a seated drive, and the strip underside `drive_z_play` above it.
 drive_top = base_thickness + drive_width;
