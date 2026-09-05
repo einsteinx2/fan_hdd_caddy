@@ -62,11 +62,9 @@ side_hole_spacing   = 101.60; // A9 - distance between the 2 side holes
 side_hole_from_conn = 28.50;  // A8 - connector end to nearest side hole
 side_hole_from_base = 6.35;   // A10 - hole centerline above drive baseplate
 // (Drive side holes are 6-32 UNC.)
-// Which way each drive's PCB (baseplate / connector) face points across the
-// caddy: -1 = toward -Y, +1 = toward +Y. The side holes sit
-// `side_hole_from_base` in from that face, so this picks which side of the
-// drive centerline the strip screw holes land on.
-drive_pcb_side = -1;          // [-1, 1]
+// A drive can go in with its PCB (connector) face toward -Y or +Y. The side
+// holes sit `side_hole_from_base` in from that face, so the strips carry a
+// screw hole on BOTH sides of each drive centerline and either way fits.
 
 // ---------- Drive layout ----------
 num_drives = 4;            // number of drives across the base
@@ -93,8 +91,9 @@ divider_thickness = 2;         // Y thickness of each divider (mm)
 // ---------- Top strips ----------
 // Two strips run across the top (Y direction) over the two columns of drive
 // side holes. They are part of the main piece: they fuse into the wall tops
-// and bridge each drive slot (print with supports). Each carries one
-// countersunk screw hole per drive to clamp the drives down from above.
+// and bridge each drive slot (print with supports). Each carries two
+// countersunk screw holes per drive (one per PCB orientation) to clamp the
+// drives down from above. The strips are solid apart from the holes.
 band_width      = 20;    // X width of each strip (2cm)
 band_thickness  = 2;     // Z thickness of each strip (mm)
 band_screw_d      = 3.8; // clearance hole for 6-32 screw shaft (mm)
@@ -103,15 +102,6 @@ band_slot   = 2;         // stretch the strip screw holes into X slots this much
                          // longer, for tolerance in the drive hole position
                          // (the back wall fixes the drives' X datum) (mm)
 
-// Lightening + airflow cutouts: open up the strip between the screw pads and
-// the side walls. What stays solid: a pad around each of the 4 screw holes, a
-// seat at each Y end (over the side wall), and a rail on each X edge running
-// the strip's length. The cutouts over the air gaps double as vents so the
-// fan's air exits up through the strip.
-band_vent_margin = 3;  // solid strip kept on each X edge (the rails) (mm)
-band_pad_margin  = 2;  // extra solid around each screw hole, beyond the head radius (mm)
-band_end_seat    = 6;  // solid strip kept at each Y end, over the side wall (mm)
-band_vent_r      = 2;  // rounded-corner radius of each cutout (mm)
 
 // ---------- Airflow: honeycomb vents ----------
 // Hexagonal vent pattern cut through the base plate AND all the walls.
@@ -183,9 +173,10 @@ access_gap_x2 = abs(fan_screw_spacing/2 - abs(side_hole_x2))
 assert(access_gap_x1 > 0, "fan_screw_access_d breaks into the drive screw countersink on the -X strip");
 assert(access_gap_x2 > 0, "fan_screw_access_d breaks into the drive screw countersink on the +X strip");
 
-// Y of a drive's side hole: offset in from its PCB-facing edge (the
-// `drive_pcb_side` side). Same for the up- and down-facing holes.
-function drive_hole_y(i) = drive_y(i) + drive_pcb_side * (drive_height/2 - side_hole_from_base);
+// Y of a drive's side holes: offset in from its PCB-facing edge, which may
+// face either way, so both candidates are returned (-Y side, +Y side).
+function drive_hole_ys(i) = [ for (s = [-1, 1])
+    drive_y(i) + s * (drive_height/2 - side_hole_from_base) ];
 
 // Top of a seated drive, and the strip underside `drive_z_play` above it.
 drive_top = base_thickness + drive_width;
@@ -446,35 +437,18 @@ module back_wall() {
 
 // One top strip, centered in X on the column `cx`. It spans the full Y width
 // (flush with the side wall outer faces) at the wall top, fusing into every
-// wall it crosses and bridging each drive slot. It carries one countersunk
-// screw hole per drive so the drives are clamped down from above.
+// wall it crosses and bridging each drive slot. It carries two countersunk
+// screw holes per drive (one for each PCB orientation) so the drives are
+// clamped down from above whichever way they went in.
 module top_strip(cx) {
     inner_y = fan_size/2;
     difference() {
         translate([cx - band_width/2, -inner_y, band_z])
             cube([band_width, 2 * inner_y, band_thickness]);
-        for (i = [0 : num_drives - 1])
-            translate([cx, drive_hole_y(i), band_z])
+        for (i = [0 : num_drives - 1], hy = drive_hole_ys(i))
+            translate([cx, hy, band_z])
                 countersunk_hole(band_thickness, band_screw_d,
                                  band_screw_head_d, top = true, slot = band_slot);
-        // lightening + airflow cutouts: a rounded slot in every gap between the
-        // screw pads (and between each end seat and the outer screw), so only the
-        // pads, the end seats, and the two X-edge rails are left solid.
-        vw   = band_width - 2 * band_vent_margin;          // X opening width
-        pad  = band_screw_head_d / 2 + band_pad_margin;    // Y solid kept around each screw
-        scr  = [ for (i = [0 : num_drives - 1]) drive_hole_y(i) ];   // screw Ys (ascending)
-        cuts = concat(
-            [ [ -inner_y + band_end_seat, scr[0] - pad ] ],                      // -Y end span
-            [ for (i = [0 : num_drives - 2]) [ scr[i] + pad, scr[i + 1] - pad ] ], // between screws
-            [ [ scr[num_drives - 1] + pad, inner_y - band_end_seat ] ]           // +Y end span
-        );
-        for (c = cuts)
-            if (c[1] - c[0] > 2 * band_vent_r)             // skip slivers too small to round
-                translate([cx, (c[0] + c[1]) / 2, band_z - 1])
-                    linear_extrude(band_thickness + 2)
-                        offset(r = band_vent_r)
-                            square([ vw - 2 * band_vent_r,
-                                     (c[1] - c[0]) - 2 * band_vent_r ], center = true);
     }
 }
 
