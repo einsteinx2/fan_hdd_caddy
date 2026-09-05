@@ -1,19 +1,24 @@
 // ============================================================
 // Fan HDD Caddy
-// Sits on top of a 140mm fan (fan blows UP). Holds 4 x 3.5"
-// HDDs standing on their long edge like books, side by side,
-// with air gaps between them so the fan blows up between the
-// drives. Low-profile orientation: the 101.6mm drive width is
-// vertical to keep total height down.
+// Sits on top of a PC case, over a 140mm fan mounted under the
+// case top (fan blows UP). Holds 4 x 3.5" HDDs standing on their
+// long edge like books, side by side, with air gaps between them
+// so the fan blows up between the drives. Low-profile orientation:
+// the 101.6mm drive width is vertical to keep total height down.
 //
 // Drives mount via their SIDE mounting holes (2 per side, the
 // "front + back" pattern per SFF-8301 -- the middle hole is
 // optional and omitted here).
 //
-// Assembly order: (1) screw the bare base down onto the fan from
-// above; (2) drop the drives in between the side walls; (3) lay
-// two clamp bands across the tops and screw down through them
-// into the drives' upward-facing side holes.
+// One printed part: base + side walls + dividers + back wall + two
+// top strips. The top strips bridge the drive slots, so print with
+// slicer supports under them.
+//
+// Assembly order: (1) screw the caddy down through the 4 corner
+// holes, through the case top, into the fan; (2) slide each drive
+// in from the open -X (connector) end until it meets the back
+// wall; (3) screw down through the top strips into the drives'
+// upward-facing side holes.
 //
 // All key dimensions are variables so the design can be
 // retargeted (different fan size, plate thickness, etc.).
@@ -25,15 +30,14 @@ $fn = 64;                 // smoothness of curves/holes
 // ---------- Fan / base parameters ----------
 fan_size        = 140;    // 140mm fan: 140 x 140 mm body
 base_thickness  = 3;      // thickness of the base plate (mm)
-// Corner radius of the base / walls / collar. This should match the FAN's
-// own corner radius. Left at 0 (fully square) so the caddy fits ANY 140mm
-// fan: a square base covers a fan with rounded corners, and the collar's
-// inner profile (derived as base_corner_r + collar_clear) becomes a Minkowski
-// clearance offset whose corner arc is centered on the fan's square corner --
-// it clears a fully-square fan and gives even more room at any rounded corner.
-// Bump this up to your fan's actual corner radius if you want a snugger,
-// corner-gripping fit for one specific fan (at the cost of universal fit).
-base_corner_r   = 0;      // corner radius of base/walls/collar (mm); 0 = square = fits any fan
+// Corner radius of the base / walls. Left at 0 (fully square) so the caddy
+// fits ANY 140mm fan hole pattern and any case top. Bump this up if the
+// mounting surface has rounded corners you want to follow.
+base_corner_r   = 0;      // corner radius of base/walls (mm); 0 = square
+// 45deg chamfer on the bottom perimeter edge, so the caddy clears the
+// chamfered edge of the case top it sits on. Must be < base_thickness and
+// <= base_edge_border (so it stays inside the solid base border).
+base_chamfer    = 2;      // bottom edge chamfer (mm)
 
 // ---------- Fan mounting screw parameters ----------
 // Standard 140mm fan mounting holes are 124.5mm apart (7.5mm
@@ -51,8 +55,7 @@ drive_height      = 26.10;  // A1 - drive height (thickness)
 side_hole_spacing   = 101.60; // A9 - distance between the 2 side holes
 side_hole_from_conn = 28.50;  // A8 - connector end to nearest side hole
 side_hole_from_base = 6.35;   // A10 - hole centerline above drive baseplate
-// (Drive side holes are 6-32 UNC; kept here as reference for a future
-//  mounting method now that bottom screws are ruled out.)
+// (Drive side holes are 6-32 UNC.)
 
 // ---------- Drive layout ----------
 num_drives = 4;            // number of drives across the base
@@ -62,49 +65,47 @@ num_drives = 4;            // number of drives across the base
 // outer face of the first drive, one against the outer face of
 // the last drive.
 wall_thickness = 2;            // Y thickness of each side wall (mm)
-// (Wall height is derived: all walls rise flush with the band tops --
+// (Wall height is derived: all walls rise flush with the strip tops --
 //  see `wall_top` in the derived-values section.)
+
+// ---------- Back wall ----------
+// A wall across the +X end (the non-connector end of the drives). The drives
+// slide in from -X and back up to it, so it fixes their X position and ties
+// the side walls, dividers, and top strips into one rigid box.
+back_wall_thickness = 2;       // X thickness of the back wall (mm)
 
 // ---------- Divider walls (between the drives) ----------
 // Walls between adjacent drives. They run the full length of the
-// base and the full wall height, giving the clamp bands something
-// to land on so the whole caddy prints as one piece.
+// base and the full wall height.
 divider_thickness = 2;         // Y thickness of each divider (mm)
 
-// ---------- Top clamp bands ----------
-// Two bands run across the top (Y direction) over the two columns of drive
-// side holes. They are SEPARATE pieces (so they print flat, with no bridges):
-// each drops into notches cut in the wall tops and rests on the drive tops --
-// pinned across its width by the notches, and along its length by end tabs that
-// drop past the outer side walls. Screw holes are kept so the drives can still
-// be clamped down with screws if desired.
-band_width      = 20;    // X width of each band (2cm)
-band_thickness  = 2;     // Z thickness of each band (mm)
+// ---------- Top strips ----------
+// Two strips run across the top (Y direction) over the two columns of drive
+// side holes. They are part of the main piece: they fuse into the wall tops
+// and bridge each drive slot (print with supports). Each carries one
+// countersunk screw hole per drive to clamp the drives down from above.
+band_width      = 20;    // X width of each strip (2cm)
+band_thickness  = 2;     // Z thickness of each strip (mm)
 band_screw_d      = 3.8; // clearance hole for 6-32 screw shaft (mm)
 band_screw_head_d = 7.0; // flat-head diameter for countersink (mm)
-band_play   = 0.2;       // fit play: notch is this much wider per side, and the
-                         // end tabs sit this far off the outer walls (mm)
-drop_depth  = 5;         // how far the band's end tabs drop past the side walls (mm)
-band_slot   = 7;         // stretch the band screw holes into X slots this much
-                         // longer, so the screws still line up if the drives are
-                         // slid fore/aft (total adjustment range, mm). At 7 the
-                         // countersink spans 14mm of the 20mm band -> ~3mm of
-                         // solid material left on each side.
+band_slot   = 2;         // stretch the strip screw holes into X slots this much
+                         // longer, for tolerance in the drive hole position
+                         // (the back wall fixes the drives' X datum) (mm)
 
-// Lightening + airflow cutouts: open up the whole band between the screw pads and
-// the end seats. What stays solid: a pad around each of the 4 screw holes, a seat
-// at each Y end (sits on the outer wall notch), and a rail on each X edge running
-// the band's length (so it still seats in every notch). The cutouts over the air
-// gaps double as vents so the fan's air exits up through the band.
-band_vent_margin = 3;  // solid band kept on each X edge (the seating rails) (mm)
+// Lightening + airflow cutouts: open up the strip between the screw pads and
+// the side walls. What stays solid: a pad around each of the 4 screw holes, a
+// seat at each Y end (over the side wall), and a rail on each X edge running
+// the strip's length. The cutouts over the air gaps double as vents so the
+// fan's air exits up through the strip.
+band_vent_margin = 3;  // solid strip kept on each X edge (the rails) (mm)
 band_pad_margin  = 2;  // extra solid around each screw hole, beyond the head radius (mm)
-band_end_seat    = 6;  // solid band kept at each Y end, for the outer-wall notch (mm)
+band_end_seat    = 6;  // solid strip kept at each Y end, over the side wall (mm)
 band_vent_r      = 2;  // rounded-corner radius of each cutout (mm)
 
 // ---------- Airflow: honeycomb vents ----------
 // Hexagonal vent pattern cut through the base plate AND all the walls.
 // The base and the walls are tuned independently:
-//   * BASE vents optimize for AIRFLOW (it sits directly on the fan) ->
+//   * BASE vents optimize for AIRFLOW (it sits over the fan) ->
 //     big holes, thin struts, ~80% open. Flat-top hexes are fine here:
 //     base holes are vertical through-holes, so hole shape never bridges.
 //   * WALL vents optimize for PRINT TIME (they are NOT for cooling) ->
@@ -118,104 +119,33 @@ base_hex_wall    = 2;   // base strut thickness between holes (mm)
 wall_hex_size    = 30;  // wall hole flat-to-flat opening (mm) -> big & sparse for speed
 wall_hex_wall    = 3;   // wall strut thickness between holes (mm) -> few, sturdy struts
 corner_square    = 15;  // solid square around each corner screw (1.5cm)
-wall_vent_border = 10;  // solid border around each wall's edges (1cm); also = rib_height
+wall_vent_border = 10;  // solid border around each wall's edges (1cm)
 
 // Base reinforcement: keep extra solid material (no honeycomb) here.
 base_edge_border    = 5;  // solid border around all 4 base edges (mm)
 divider_base_extra  = 2;  // extra solid base on each side of the divider bottoms (mm)
 
-// ---------- Two-piece split (print flat, no supports) ----------
-// The caddy prints as two parts so nothing needs slicer supports:
-//   (1) the MAIN piece (base + walls + bands + drive bumps) -- with NO
-//       downward rim, so it prints flat on the bed and sits directly on
-//       top of the fan;
-//   (2) a separate COLLAR that slides straight down over the outside,
-//       hooks onto rest tabs on the side walls, and continues down past
-//       the base to wrap the fan edges and keep the fan from shifting.
-part = "all";          // ["all", "main", "collar", "bands"]  which part(s) to emit
-
-// ---------- Export orientation (print-ready) ----------
-// When exporting for the slicer, `export_layout` flips the bands flat-plate-down
-// (hook tabs pointing up) and seats them on z = 0 -- their support-free print
-// orientation. export.sh turns this on for every export; it stays off for the
-// assembled "all" preview. No X/Y spacing is applied: Bambu Studio re-centers
-// each loaded file on the plate, so spacing parts here has no effect -- use the
-// slicer's Arrange to lay multiple parts out.
-export_layout = false;                 // [true, false]
-
-// Rest tabs: gusseted shelves on the OUTSIDE of each side wall that the
-// collar's ledge lands on. The gusset slopes down to the bed so it prints
-// without support.
-tab_out     = 2;       // how far each tab sticks out past the wall (mm)
-tab_len     = 20;      // X width of each tab at its base (mm)
-tab_top_len = 6;       // X width of the short flat top the collar rests on (mm).
-                       // The tab tapers 45deg from tab_len down to this, and the
-                       // collar window matches, so the collar's ledge bridges only
-                       // this short span when printing (no long bridges).
-tab_height  = 3;       // Z height of the tab tip face (mm)
-
-// Collar that wraps the fan and rests on the tabs.
-collar_clear = 0.4;    // gap between the collar inner face and the fan/base, per side (mm)
-collar_thick = 2;      // collar wall thickness (mm)
-collar_drop  = 5;      // how far the collar reaches below the base to wrap the fan (mm)
-collar_ledge = 3;      // height of the collar's resting ledge above the tab (mm)
-
-// Locking detents: thin ramps on the wall exteriors (one each side of each
-// rest tab) that the collar's lower ring snaps over and seats against, so it
-// stays put without being pried off accidentally.
-lock_out  = 0.7;       // detent protrusion (mm)
-lock_len  = 8;         // X length of each detent ramp (mm)
-lock_play = 0.2;       // vertical free lift before the catch bites (mm). The barb
-                       // base drops below the collar's seated top edge so its 45deg
-                       // face reaches the collar after only this much lift. Keep > 0
-                       // (a hair of play) rather than 0, but well under collar_clear.
-
-// ---------- Drive retainer bumps (screwless drive fit) ----------
-// Small bumps protrude inward from the wall faces to pinch each drive's
-// slot down close to the drive's actual thickness, holding the drives
-// without screws (the top clamp-band screw holes are kept for optional
-// use). Discrete bumps (not a solid rib) keep the airflow gaps open.
-// Drives are 20TB WD WD200EDGZ -> standard 26.1mm height (= drive_height).
-drive_tol  = 0.5;  // play left per side after the drive width -> 1mm total (Y)
-drive_z_play = 0.4;// vertical (Z) clearance above the drives: the band underside
-                   // and the notch floor sit this far above the drive top, so a
-                   // drive always drops in and the band always seats on the walls
-rib_count  = 4;    // number of bumps along each wall length
-rib_width  = 10;   // X width of each bump (1cm)
-rib_height = wall_vent_border;  // Z height of each bump = wall solid-border height
-lead_in    = 4;    // 45deg lead-in on the entry-end bumps, so drives slide in
-                   // from either X end without catching (set 0 to disable)
-rib_inset  = 11;   // pull the whole bump field in this far from each wall end, so
-                   // the screw-adjacent end bumps clear the corner fan-screw
-                   // countersinks (which reach to within ~0.25mm of the walls)
+// ---------- Drive fit ----------
+drive_z_play = 0.4;// vertical (Z) clearance above the drives: the strip underside
+                   // sits this far above the drive top, so a drive always slides
+                   // in under the strips
+// (No side-to-side retainers: the drives sit loose in their slots, the top
+//  screws hold them, and the free space either side is the airflow gap.)
 
 /* [Visualization] */
 // Show translucent drive placeholders (GUI preview only; never exported)
 show_drives = true;        // [true, false]
-// Show the collar in the "all" view (ignored when `part` selects a single part)
-show_collar = true;         // [true, false]
-// Show the main drive holder in the "all" view (turn off to see only the collar)
-show_main = true;           // [true, false]
-// Show the clamp bands in the "all" view (both bands at once)
-show_bands = true;          // [true, false]
 
-// Render a piece as a translucent gray "ghost" (the same % modifier the drive
-// placeholders use) instead of solid -- handy for seeing parts behind it.
-// NOTE: a ghosted piece is EXCLUDED from the F6 render / STL export, so turn
-// these off before exporting.
-clear_main   = false;       // [true, false]
-clear_collar = false;       // [true, false]
-clear_bands  = false;       // [true, false]
-
-// Per-piece colors (preview only; never exported). [R, G, B] 0..1.
+// Piece color (preview only; never exported). [R, G, B] 0..1.
 color_main   = [0.95, 0.84, 0.20];  // yellow
-color_collar = [0.95, 0.55, 0.30];  // warm orange
-color_bands  = [0.45, 0.74, 0.45];  // green
 
 // ============================================================
 // Derived values
 // ============================================================
 /* [Hidden] */
+
+assert(base_chamfer < base_thickness, "base_chamfer must be smaller than base_thickness");
+assert(base_chamfer <= base_edge_border, "base_chamfer must stay inside base_edge_border");
 
 // Y center of each drive: evenly distributed across the base.
 drive_pitch = fan_size / num_drives;               // center-to-center (Y)
@@ -224,47 +154,25 @@ function drive_y(i) = -fan_size/2 + drive_pitch/2 + i*drive_pitch;
 // Air gap between adjacent drive faces (for reporting/sanity).
 air_gap = drive_pitch - drive_height;
 
-// X positions of the two side-hole columns. Connector end is at -X
-// so all drives share the same orientation.
-side_hole_x1 = -drive_length/2 + side_hole_from_conn;   // near (connector) column
-side_hole_x2 = side_hole_x1 + side_hole_spacing;        // far column
+// X datum: the drives back up to the inner face of the back wall, so their
+// connector end (-X) overhangs the base. The two side-hole columns follow.
+drive_x_back  = fan_size/2 - back_wall_thickness;      // drive back face rests here
+drive_x_front = drive_x_back - drive_length;           // connector end (-X)
+side_hole_x1  = drive_x_front + side_hole_from_conn;   // near (connector) column
+side_hole_x2  = side_hole_x1 + side_hole_spacing;      // far column
 
 // Y of a drive's side hole: offset in from its baseplate-facing
 // (+Y) edge. Same for the up- and down-facing holes.
 function drive_hole_y(i) = drive_y(i) + drive_height/2 - side_hole_from_base;
 
-// Top of a seated drive, and the band underside / notch floor `drive_z_play`
-// above it -- so the drive always drops in and the band seats on the walls.
+// Top of a seated drive, and the strip underside `drive_z_play` above it.
 drive_top = base_thickness + drive_width;
 band_z    = drive_top + drive_z_play;
 
-// Inner (slot-facing) Y face of the wall below / above drive i. The two
-// outer drives are bounded by a side wall on one side and a divider on the
-// other; the inner drives are bounded by dividers on both sides.
-function lower_wall_inner(i) = (i == 0)
-    ? -fan_size/2 + wall_thickness
-    : (drive_y(i) - drive_pitch/2) + divider_thickness/2;
-function upper_wall_inner(i) = (i == num_drives - 1)
-    ?  fan_size/2 - wall_thickness
-    : (drive_y(i) + drive_pitch/2) - divider_thickness/2;
-
-// Half the clamped slot opening: the drive half-width plus per-side play.
-half_slot = drive_height/2 + drive_tol;
-
-// X centers of the bumps along a wall: rib_count bumps evenly spaced, the
-// first and last inset `rib_inset` from the wall ends (so the end bumps clear
-// the corner fan-screw countersinks).
-function rib_x(j) = -fan_size/2 + rib_inset + rib_width/2
-                    + j * (fan_size - 2*rib_inset - rib_width) / (rib_count - 1);
-
-// Walls rise all the way up flush with the top of the bands, so the
-// whole caddy has a flat top. (The bands interpenetrate the walls
+// Walls rise all the way up flush with the top of the strips, so the
+// whole caddy has a flat top. (The strips interpenetrate the walls
 // where they cross, fusing everything into one solid.)
 wall_top = band_z + band_thickness;
-
-// Z of the rest-tab top (= where the collar ledge lands). The 45deg gusset
-// under each tab rises from the base top, so the tab starts `tab_out` above it.
-rest_z = base_thickness + tab_out + tab_height;
 
 // ============================================================
 // Generic modules
@@ -283,18 +191,6 @@ module rounded_plate(size, thickness, corner_r) {
                     translate([x, y]) circle(r = corner_r);
         } else {
             square(size, center = true);
-        }
-}
-
-// A rounded-corner rectangular tube standing on the XY plane: an outer
-// rounded plate with a (slightly over-tall) inner rounded plate bored out,
-// spanning z = z0 .. z1.
-module rounded_tube(osz, orr, isz, irr, z0, z1) {
-    translate([0, 0, z0])
-        difference() {
-            rounded_plate(osz, z1 - z0, orr);
-            translate([0, 0, -1])
-                rounded_plate(isz, (z1 - z0) + 2, irr);
         }
 }
 
@@ -372,19 +268,33 @@ module honeycomb_holes(thickness) {
             honeycomb_panel_2d(inner, inner, base_hex_size, base_hex_wall);
 }
 
-// Honeycomb vent cutter for the walls: a hex field in the X-Z plane,
-// inset `wall_vent_border` from every wall edge, swept through Y so it
-// perforates all five walls identically. Its Z range stays clear of
-// the base and the bands, so only the walls get vented.
+// Shared size of the wall vent fields: the wall span between the base top
+// and the wall top, inset `wall_vent_border` from every edge.
+wall_vent_w  = fan_size - 2 * wall_vent_border;
+wall_vent_h  = (wall_top - base_thickness) - 2 * wall_vent_border;
+wall_vent_zc = (base_thickness + wall_top) / 2;
+
+// Honeycomb vent cutter for the X-running walls: a hex field in the X-Z
+// plane, swept through Y so it perforates both side walls and all dividers
+// identically. Its X range stays inside the wall border, so it does not
+// reach the back wall; its Z range stays clear of the base and the strips.
 module wall_honeycomb_cutter() {
-    inner_w = fan_size - 2 * wall_vent_border;
-    inner_h = (wall_top - base_thickness) - 2 * wall_vent_border;
-    zc      = (base_thickness + wall_top) / 2;
-    depth   = fan_size + 2;             // sweep through the full Y depth
-    translate([0, depth/2, zc])
+    depth = fan_size + 2;             // sweep through the full Y depth
+    translate([0, depth/2, wall_vent_zc])
         rotate([90, 0, 0])
             linear_extrude(height = depth)
-                honeycomb_panel_2d(inner_w, inner_h, wall_hex_size, wall_hex_wall, pointy = true);
+                honeycomb_panel_2d(wall_vent_w, wall_vent_h, wall_hex_size, wall_hex_wall, pointy = true);
+}
+
+// Honeycomb vent cutter for the back wall: the same hex field stood up in
+// the Y-Z plane, swept through the back wall's X range ONLY. Sweeping it any
+// further would nick the ends of the dividers where they meet the back wall.
+module back_wall_honeycomb_cutter() {
+    depth = back_wall_thickness + 2;
+    translate([drive_x_back - 1, 0, wall_vent_zc])
+        rotate([90, 0, 90])           // map panel (x,y) -> world (Y,Z), extrude along +X
+            linear_extrude(height = depth)
+                honeycomb_panel_2d(wall_vent_w, wall_vent_h, wall_hex_size, wall_hex_wall, pointy = true);
 }
 
 // Solid keep-out squares centered on each corner screw, so the
@@ -396,9 +306,9 @@ module corner_keepouts(thickness) {
             cube([corner_square, corner_square, thickness + 4], center = true);
 }
 
-// Solid keep-out strips under every wall (the two side walls and the
-// dividers), so the base stays solid where the walls land on it.
-// Footprints mirror the side_walls()/dividers() X/Y placement.
+// Solid keep-out strips under every wall (the two side walls, the back wall,
+// and the dividers), so the base stays solid where the walls land on it.
+// Footprints mirror the side_walls()/back_wall()/dividers() X/Y placement.
 module wall_footprints(thickness) {
     z0 = -2;
     h  = thickness + 4;
@@ -407,6 +317,9 @@ module wall_footprints(thickness) {
         cube([fan_size, wall_thickness, h]);
     translate([-fan_size/2, fan_size/2 - wall_thickness, z0])
         cube([fan_size, wall_thickness, h]);
+    // back wall (flush with the +X edge)
+    translate([drive_x_back, -fan_size/2, z0])
+        cube([back_wall_thickness, fan_size, h]);
     // dividers (centered in each gap), widened by divider_base_extra on
     // each side to reinforce where they join the base
     for (i = [0 : num_drives - 2]) {
@@ -417,11 +330,23 @@ module wall_footprints(thickness) {
     }
 }
 
+// The solid base plate body with the bottom perimeter chamfer: the full
+// plate from `base_chamfer` up, hulled down to a plate inset `base_chamfer`
+// per side at z = 0, giving a 45deg chamfer all the way around.
+module base_body() {
+    hull() {
+        translate([0, 0, base_chamfer])
+            rounded_plate(fan_size, base_thickness - base_chamfer, base_corner_r);
+        rounded_plate(fan_size - 2 * base_chamfer, 0.01,
+                      max(base_corner_r - base_chamfer, 0));
+    }
+}
+
 // The base plate with the honeycomb vents cut in. Material is kept
 // solid around the corner screws and under all of the walls.
 module perforated_base() {
     difference() {
-        rounded_plate(fan_size, base_thickness, base_corner_r);
+        base_body();
         // cut the honeycomb everywhere EXCEPT the protected regions
         difference() {
             honeycomb_holes(base_thickness);
@@ -434,7 +359,8 @@ module perforated_base() {
 }
 
 // The four corner fan-mounting holes, countersunk from the TOP
-// (screws drop in from above and thread down into the fan).
+// (screws drop in from above, pass through the case top, and thread
+// into the fan).
 module fan_mount_holes() {
     off = fan_screw_spacing / 2;
     for (x = [-off, off], y = [-off, off])
@@ -447,7 +373,7 @@ module fan_mount_holes() {
 // flank the outer faces of the first and last drives. Clipped to the
 // base outline so they follow its rounded corners and stay on the plate.
 module side_walls() {
-    h = wall_top - base_thickness;   // rise flush with the band tops
+    h = wall_top - base_thickness;   // rise flush with the strip tops
     intersection() {
         union() {
             // wall flush against the -Y edge of the base
@@ -464,9 +390,9 @@ module side_walls() {
 
 // Divider walls between adjacent drives, centered in each air gap.
 // Full length and height like the side walls (clipped to the base
-// outline) so the clamp bands land on them.
+// outline) so the top strips land on them.
 module dividers() {
-    h = wall_top - base_thickness;   // rise flush with the band tops
+    h = wall_top - base_thickness;   // rise flush with the strip tops
     intersection() {
         union() {
             for (i = [0 : num_drives - 2]) {
@@ -480,145 +406,31 @@ module dividers() {
     }
 }
 
-// One retainer bump, `rib_width` wide in X centered on `xc`. It spans Y from
-// the wall (`u_back`, overlapped into the wall) out to the gripping face
-// (`u_tip`), and Z from `z0` up by `h`. With `cham > 0` the underside is
-// sloped 45deg from the wall-bottom up to the tip, so a bump that floats over
-// the open slot is self-supporting (no slicer supports needed). With
-// `cham = 0` the bump is a plain cube (used for the base-supported row).
-// `lead_lo` / `lead_hi` bevel the tip corner at the -X / +X end so a drive
-// sliding in from that end funnels into the rail instead of catching.
-module bump_solid(xc, u_back, u_tip, z0, h, cham,
-                  lead_lo = false, lead_hi = false,
-                  ramp_lo = false, ramp_hi = false) {
-    x_lo   = xc - rib_width/2;
-    x_hi   = xc + rib_width/2;
-    tipdir = (u_tip > u_back) ? 1 : -1;     // +1: tip is at larger Y (lower wall)
-    difference() {
-        union() {
-            // main bump body
-            translate([xc - rib_width/2, 0, 0])
-                rotate([90, 0, 90])         // map polygon (Y,Z) -> world, extrude along X
-                    linear_extrude(rib_width)
-                        polygon([
-                            [u_back, z0 + h],    // back-top (into the wall)
-                            [u_tip,  z0 + h],    // tip-top
-                            [u_tip,  z0 + cham], // tip: bottom of vertical grip face
-                            [u_back, z0]         // back-bottom: underside slopes to tip
-                        ]);
-            // side ramps: ADD a sloped lead-in extending OUT from an X-end face
-            // (the bump keeps full size) so a drive sliding past doesn't catch
-            // the leading corner. Each ramp hulls the bump's end profile down to
-            // the wall over `lead_in` in X, preserving the underside chamfer.
-            if (ramp_lo)
-                hull() {
-                    translate([x_lo, 0, 0])
-                        rotate([90, 0, 90]) linear_extrude(0.01)
-                            polygon([[u_back, z0 + h], [u_tip, z0 + h],
-                                     [u_tip, z0 + cham], [u_back, z0]]);
-                    translate([x_lo - lead_in, u_back, z0 + h/2])
-                        cube([0.01, 0.02, h], center = true);
-                }
-            if (ramp_hi)
-                hull() {
-                    translate([x_hi - 0.01, 0, 0])
-                        rotate([90, 0, 90]) linear_extrude(0.01)
-                            polygon([[u_back, z0 + h], [u_tip, z0 + h],
-                                     [u_tip, z0 + cham], [u_back, z0]]);
-                    translate([x_hi + lead_in, u_back, z0 + h/2])
-                        cube([0.01, 0.02, h], center = true);
-                }
-        }
-        // lead-in: ramp the gripping face from flush with the wall (`u_back`)
-        // at the entry end up to full protrusion (`u_tip`) over `lead_in` in X,
-        // so the ramp starts exactly at the wall end (no flat dead zone).
-        if (lead_lo && lead_in > 0)
-            translate([0, 0, z0 - 1])
-                linear_extrude(h + 2)
-                    polygon([[x_lo,           u_back],
-                             [x_lo - 1,        u_tip + tipdir],
-                             [x_lo + lead_in,  u_tip]]);
-        if (lead_hi && lead_in > 0)
-            translate([0, 0, z0 - 1])
-                linear_extrude(h + 2)
-                    polygon([[x_hi,           u_back],
-                             [x_hi + 1,        u_tip + tipdir],
-                             [x_hi - lead_in,  u_tip]]);
-    }
-}
-
-// Square retainer bumps that pinch each drive slot down to the drive
-// thickness (plus `drive_tol` per side), so the drives stay put without
-// screws. Two rows per wall face -- one along the base, one at the drive
-// top -- of `rib_count` 1cm squares each. The square shape (vs a solid
-// rib) leaves the airflow gaps mostly open. Both faces of each divider
-// get bumps; the two side walls get bumps on their inner face only. The
-// top row floats over the slot, so its underside is chamfered 45deg; the
-// bottom row sits on the base and stays a full cube.
-module drive_retainers() {
-    weld   = 0.6;                          // overlap into the wall so bumps fuse
-    top_z0 = wall_top - rib_height;        // top row still starts in the upper border
-    // [z0 of row, row height, does this row float (chamfer the underside)?]
-    // The top row is capped at the drive top (band_z) so it stops below the
-    // separate clamp band that drops in there.
-    rows = [ [base_thickness, rib_height,          false],   // bottom row fills the lower border
-             [top_z0,         drive_top - top_z0,  true ] ]; // top row, capped at the drive top
+// The back wall across the +X end, full Y width and full wall height, with
+// its own hex vents. The vents are cut HERE (before the union) so the side
+// walls and dividers that meet it fill in any hole they cross, keeping every
+// wall-to-wall joint solid.
+module back_wall() {
+    h = wall_top - base_thickness;
     intersection() {
-        union() {
-            for (i = [0 : num_drives - 1]) {
-                ylo       = lower_wall_inner(i);        // wall face below the slot
-                yhi       = upper_wall_inner(i);        // wall face above the slot
-                y_lo_face = drive_y(i) - half_slot;     // inner face of lower bumps
-                y_hi_face = drive_y(i) + half_slot;     // inner face of upper bumps
-                for (r = rows) {
-                    z0    = r[0];
-                    h     = r[1];
-                    float = r[2];
-                    for (j = [0 : rib_count - 1]) {
-                        x = rib_x(j);
-                        // end bumps get a cut-in lead-in on their outer end;
-                        // inner bumps get additive ramps on both X ends
-                        lead_lo = (j == 0);                          // bevel -X end
-                        lead_hi = (j == rib_count - 1);              // bevel +X end
-                        inner   = (j > 0) && (j < rib_count - 1);
-                        // lower-wall bump, protruding up (+Y) into the slot
-                        cl = float ? (y_lo_face - (ylo - weld)) : 0;
-                        bump_solid(x, ylo - weld, y_lo_face, z0, h, cl,
-                                   lead_lo, lead_hi, inner, inner);
-                        // upper-wall bump, protruding down (-Y) into the slot
-                        cu = float ? ((yhi + weld) - y_hi_face) : 0;
-                        bump_solid(x, yhi + weld, y_hi_face, z0, h, cu,
-                                   lead_lo, lead_hi, inner, inner);
-                    }
-                }
-            }
+        difference() {
+            translate([drive_x_back, -fan_size/2, base_thickness])
+                cube([back_wall_thickness, fan_size, h]);
+            back_wall_honeycomb_cutter();
         }
-        // clip to the base footprint so end bumps follow the rounded corners
         rounded_plate(fan_size, wall_top, base_corner_r);
     }
 }
 
-// One clamp band: a separate strip centered in X on the column `cx`. Its flat
-// plate spans the drives (just past the side walls) and rests on the drive
-// tops, dropping into the wall notches that pin it across its width. At each
-// end it extends out to the collar's outer edge and drops `drop_depth` past the
-// side wall, hooking it to pin the band along its length. It carries one
-// countersunk screw hole per drive so the drives can still be screwed down.
-module clamp_band(cx) {
-    inner_y = fan_size/2 + band_play;                     // plate reaches just past the walls
-    outer_y = fan_size/2 + collar_clear + collar_thick;   // end tabs reach the collar's outer edge
+// One top strip, centered in X on the column `cx`. It spans the full Y width
+// (flush with the side wall outer faces) at the wall top, fusing into every
+// wall it crosses and bridging each drive slot. It carries one countersunk
+// screw hole per drive so the drives are clamped down from above.
+module top_strip(cx) {
+    inner_y = fan_size/2;
     difference() {
-        union() {
-            // plate: rests on the drive tops / in the wall notches
-            translate([cx - band_width/2, -inner_y, band_z])
-                cube([band_width, 2 * inner_y, band_thickness]);
-            // end tabs: extend past each side wall and drop down to hook it
-            for (sy = [-1, 1])
-                translate([cx - band_width/2,
-                           sy < 0 ? -outer_y : inner_y,
-                           band_z - drop_depth])
-                    cube([band_width, outer_y - inner_y, drop_depth + band_thickness]);
-        }
+        translate([cx - band_width/2, -inner_y, band_z])
+            cube([band_width, 2 * inner_y, band_thickness]);
         for (i = [0 : num_drives - 1])
             translate([cx, drive_hole_y(i), band_z])
                 countersunk_hole(band_thickness, band_screw_d,
@@ -644,155 +456,20 @@ module clamp_band(cx) {
     }
 }
 
-// Both clamp bands (separate pieces that drop into the wall notches).
-module clamp_bands() {
-    clamp_band(side_hole_x1);
-    clamp_band(side_hole_x2);
-}
-
-// Notches cut in the wall tops where the bands cross, down to the drive top
-// (band_z), so each separate band drops in and seats on the drives. The notch
-// is `band_play` wider than the band per side; the full-height wall flanking it
-// pins the band across its width. Cut through the full Y depth so it notches
-// every wall (both side walls and all dividers) the band crosses.
-module band_notches() {
-    for (cx = [side_hole_x1, side_hole_x2])
-        translate([cx - band_width/2 - band_play, -fan_size/2 - 1, band_z])
-            cube([band_width + 2 * band_play, fan_size + 2, wall_top - band_z + 1]);
-}
-
-// Rest tabs: a gusseted shelf on the OUTSIDE of each side wall that the collar's
-// ledge lands on. Two profiles combine: in Y-Z a gusset whose underside slopes
-// to the bed (so the tab prints without support); in X-Z a trapezoid that tapers
-// 45deg from `tab_len` at the base up to a short `tab_top_len` flat top -- so the
-// collar's matching ledge only has to bridge that short flat.
-module rest_tabs() {
-    chamf_z = rest_z - (tab_len - tab_top_len) / 2;   // where the 45deg X-chamfers begin
-    for (sy = [-1, 1])
-        intersection() {
-            // Y-Z gusset prism, full tab_len wide in X
-            translate([-tab_len/2, 0, 0])
-                rotate([90, 0, 90])         // map polygon (Y,Z) -> world, extrude along X
-                    linear_extrude(tab_len)
-                        polygon([
-                            [sy * (fan_size/2),           0],                 // wall foot, at the bed
-                            [sy * (fan_size/2),           rest_z],             // wall, tab top
-                            [sy * (fan_size/2 + tab_out), rest_z],             // tip, top
-                            [sy * (fan_size/2 + tab_out), rest_z - tab_height] // tip, then sloped to the bed
-                        ]);
-            // X-Z trapezoid mask: full width to chamf_z, then 45deg in to the short
-            // top at rest_z (extruded across all Y; the prism trims it to the tab)
-            translate([0, 80, 0])
-                rotate([90, 0, 0])          // map polygon (X,Z) -> world, extrude along Y
-                    linear_extrude(160)
-                        polygon([
-                            [-tab_len/2,      -1],
-                            [ tab_len/2,      -1],
-                            [ tab_len/2,       chamf_z],
-                            [ tab_top_len/2,   rest_z],
-                            [-tab_top_len/2,   rest_z],
-                            [-tab_len/2,       chamf_z]
-                        ]);
-        }
-}
-
-// Locking detents: a one-way snap on the OUTSIDE of each side wall, one on each
-// side of the rest tab (halfway out to the wall end), so four total. Each barb
-// overhangs the collar's seated top edge (z = base_thickness), reaching full
-// protrusion just above it. Its underside is a 45deg catch face (self-supporting in print)
-// and its top is a long gentle lead-in that fades flush at the solid-border
-// top. The collar's lower ring slides down the gentle lead-in with light force,
-// then springs in under the barb and seats RELAXED -- the wall below the barb
-// is flush, so nothing squeezes it. To pull the collar back off, its top edge
-// must climb the steep 45deg face (flexing out lock_out - collar_clear), which
-// is why removal takes deliberate force while insertion is easy. Prints without
-// support: the solid wall carries the barb base, the 45deg underside grows out
-// at exactly 45deg, and the lead-in recedes going up. The barb base sits
-// `collar_clear - lock_play` below the seated top edge, so the 45deg face meets
-// the collar's inner face after only `lock_play` of lift (the catch engagement).
-module lock_tabs() {
-    lx      = (tab_len/2 + fan_size/2) / 2;          // halfway: rest-tab edge -> wall end
-    z_base  = base_thickness - (collar_clear - lock_play);  // barb base, dropped for tighter catch
-    z_tip   = z_base + lock_out;                     // tip height (45deg underside -> self-supporting)
-    z_top   = base_thickness + wall_vent_border;     // lead-in fades flush at the solid-border top
-    for (sy = [-1, 1], sx = [-1, 1])
-        translate([sx * lx - lock_len/2, 0, 0])
-            rotate([90, 0, 90])         // map polygon (Y,Z) -> world, extrude along X
-                linear_extrude(lock_len)
-                    polygon([
-                        [sy * (fan_size/2),            z_base],  // catch base, just below the collar top edge
-                        [sy * (fan_size/2 + lock_out), z_tip],   // tip: 45deg catch underside below it
-                        [sy * (fan_size/2),            z_top]    // gentle lead-in back flush (insertion)
-                    ]);
-}
-
-// The collar: a separate part that slides straight down over the outside of
-// the main piece. A low ring wraps the fan and the lower base edge all the
-// way around to keep the fan from sliding. With a square base (base_corner_r
-// = 0) it grips on the flat +/-X faces, with the corners left clear so any
-// fan corner radius fits; raise base_corner_r to a fan's actual radius to add
-// a snug corner grip too. On the +/-Y sides only it carries raised "goalpost" walls --
-// each has an open window that a wall's rest tab slides up through, capped by
-// a ledge that lands on the tab top. The +/-X sides stay low so the drives'
-// end overhang clears the collar.
-module collar() {
-    isz = fan_size + 2 * collar_clear;                 // inner: clears base/fan
-    osz = fan_size + 2 * (collar_clear + collar_thick);// outer
-    irr = base_corner_r + collar_clear;
-    orr = base_corner_r + collar_clear + collar_thick;
-    z_bot = -collar_drop;                  // wraps this far below the base
-    z_top = rest_z + collar_ledge;         // top of the resting ledge
-    rw    = tab_len + 12;                  // raised +/-Y wall length (tab + a post each side)
-    wb    = tab_len + 2;                   // window width at the base (tab + 1mm play/side)
-    wt    = tab_top_len + 2;               // window width at the top -> the ledge's bridge span
-    wy    = collar_thick + tab_out + 3;    // window depth (through the wall + past the tab tip)
-    chamf_z = rest_z - (tab_len - tab_top_len) / 2;   // matches the rest-tab chamfer start
-    difference() {
+// Both top strips, one over each side-hole column, clipped to the base
+// footprint so they follow its corners.
+module top_strips() {
+    intersection() {
         union() {
-            // low ring all around: wraps the fan and the lower base edge
-            rounded_tube(osz, orr, isz, irr, z_bot, base_thickness);
-            // raised walls on the +/-Y sides only, carrying the ledge. The outer
-            // top corners are cut back at 45deg (parallel to the window trapezoid)
-            // to save plastic and look cleaner -- a line from each bottom-outer
-            // corner up to the top.
-            for (sy = [-1, 1])
-                intersection() {
-                    translate([-rw/2, sy * isz/2 - (sy < 0 ? collar_thick : 0), base_thickness])
-                        cube([rw, collar_thick, z_top - base_thickness]);
-                    // X-Z trapezoid mask: full width at the base, 45deg in to the top
-                    translate([0, 80, 0])
-                        rotate([90, 0, 0])
-                            linear_extrude(160)
-                                polygon([
-                                    [-rw/2,  base_thickness - 1],
-                                    [ rw/2,  base_thickness - 1],
-                                    [ rw/2,  base_thickness],
-                                    [ rw/2 - (z_top - base_thickness),  z_top],
-                                    [-(rw/2 - (z_top - base_thickness)), z_top],
-                                    [-rw/2,  base_thickness]
-                                ]);
-                }
+            top_strip(side_hole_x1);
+            top_strip(side_hole_x2);
         }
-        // windows: open the +/-Y walls (ring + raised) from below up to the tab
-        // top, as a trapezoid matching the rest tab -- full width to chamf_z, then
-        // 45deg in to a short top, so the ledge only bridges `wt` and the sloped
-        // sides print without support.
-        for (sy = [-1, 1]) {
-            yb = sy * (fan_size/2 - 1) - (sy < 0 ? wy : 0);
-            // full-width part (through the ring and lower wall) up to the chamfer
-            translate([-wb/2, yb, z_bot - 1])
-                cube([wb, wy, chamf_z - (z_bot - 1)]);
-            // 45deg trapezoid from chamf_z up to the short top at rest_z
-            hull() {
-                translate([-wb/2, yb, chamf_z])         cube([wb, wy, 0.01]);
-                translate([-wt/2, yb, rest_z - 0.01])   cube([wt, wy, 0.01]);
-            }
-        }
+        rounded_plate(fan_size, wall_top, base_corner_r);
     }
 }
 
 // Translucent ghost drives, for visualizing the layout only
-// (not part of the printed geometry).
+// (not part of the printed geometry). Backed up against the back wall.
 module ghost_drives() {
     for (i = [0 : num_drives - 1]) {
         yc = drive_y(i);
@@ -800,7 +477,7 @@ module ghost_drives() {
         // shows as a translucent ghost in OpenSCAD's GUI preview; the
         // CGAL render used for PNGs drops it, so flip to a solid color()
         // temporarily if you need it in a rendered image.)
-        %translate([-drive_length/2, yc - drive_height/2, base_thickness])
+        %translate([drive_x_front, yc - drive_height/2, base_thickness])
             cube([drive_length, drive_height, drive_width]);
     }
 }
@@ -809,57 +486,35 @@ module ghost_drives() {
 // Assembly
 // ============================================================
 
-// The MAIN piece: base + side walls + dividers + drive bumps + rest tabs, with
-// the screw holes, wall vents, and band notches cut out. No rim and no clamp
-// bands (those are separate), so it prints flat on the bed with no top bridges.
+// The whole caddy: base + side walls + dividers + back wall + top strips,
+// with the fan screw holes and the wall vents cut out.
 module main_piece() {
     difference() {
         union() {
             perforated_base();
             side_walls();
             dividers();
-            drive_retainers();
-            rest_tabs();
-            lock_tabs();
+            back_wall();
+            top_strips();
         }
         fan_mount_holes();
         wall_honeycomb_cutter();
-        band_notches();
     }
 }
 
-// Emit a piece: hidden if !show; a translucent gray ghost (% modifier, like the
-// drive placeholders) when `clear`; otherwise solid in color `col`. A ghosted
-// piece is dropped from the F6 render / STL export, so disable `clear_*` before
-// exporting.
-module styled(show, clear, col) {
-    if (show) {
-        if (clear) %union() children();
-        else       color(col) children();
-    }
-}
-
-styled(part == "main"   || (part == "all" && show_main),   clear_main,   color_main)
-    main_piece();
-styled(part == "collar" || (part == "all" && show_collar), clear_collar, color_collar)
-    collar();
-styled(part == "bands"  || (part == "all" && show_bands),  clear_bands,  color_bands)
-    if (export_layout)
-        // flip flat-plate-down and seat on the bed (support-free print orientation)
-        translate([0, 0, band_z + band_thickness]) rotate([180, 0, 0]) clamp_bands();
-    else
-        clamp_bands();
-if (show_drives && part != "collar" && part != "bands") ghost_drives();
+color(color_main) main_piece();
+if (show_drives) ghost_drives();
 
 // Console report
 echo(str("Air gap between drives: ", air_gap, " mm"));
-echo(str("Drive overhang per X end: ", (drive_length - fan_size)/2, " mm"));
+echo(str("Free side play, inner slots: ", drive_pitch - divider_thickness - drive_height,
+         " mm (slot ", drive_pitch - divider_thickness, " - drive ", drive_height, ")"));
+echo(str("Free side play, outer slots: ",
+         drive_pitch - wall_thickness - divider_thickness/2 - drive_height,
+         " mm (slot ", drive_pitch - wall_thickness - divider_thickness/2,
+         " - drive ", drive_height, ")"));
+echo(str("Drive overhang at connector (-X) end: ", -fan_size/2 - drive_x_front, " mm"));
 echo(str("Overall caddy height (flush top): ", wall_top, " mm"));
-echo(str("Collar reaches below base: ", collar_drop, " mm  -> assembled height ",
-         wall_top + collar_drop, " mm"));
-echo(str("Rest-tab top (collar ledge lands here): z = ", rest_z, " mm"));
-echo(str("Collar outer footprint: ", fan_size + 2 * (collar_clear + collar_thick),
-         " mm square (tabs reach ", fan_size + 2 * tab_out, " mm)"));
-echo(str("Clamped drive slot opening: ", drive_height + 2 * drive_tol,
-         " mm (drive ", drive_height, " + ", 2 * drive_tol, " play)"));
-echo(str("Vertical play above drives: ", drive_z_play, " mm (band/notch floor at z = ", band_z, ")"));
+echo(str("Bottom edge chamfer: ", base_chamfer, " mm (bottom face ",
+         fan_size - 2 * base_chamfer, " mm square)"));
+echo(str("Vertical play above drives: ", drive_z_play, " mm (strip underside at z = ", band_z, ")"));
