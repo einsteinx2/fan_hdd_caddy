@@ -250,13 +250,21 @@ module honeycomb_panel_2d(w, h, hs, hw, pointy = false) {
     S      = hs + hw;            // center-to-center spacing (all 6 neighbors)
     r_hole = hs / sqrt(3);       // circumradius of each hex hole
     pitch  = S * sqrt(3) / 2;    // row/column pitch across the flats
+    ny     = ceil((h/2) / pitch) + 1;
+    nx     = ceil((w/2) / S) + 1;
+    // Pointy mode: clip the sides flush with the flat side of the outermost
+    // WHOLE hex (over both row parities), so the partial hexes in the other
+    // rows end at exactly the same X as the whole hexes next to them.
+    x_edge = pointy
+        ? max([ for (r = [-ny : ny]) for (c = [-nx : nx])
+                let (cx = abs(c*S + ((r % 2 == 0) ? 0 : S/2)))
+                if (cx + hs/2 <= w/2) cx + hs/2 ])
+        : w/2;
     intersection() {
-        square([w, h], center = true);
+        square([2 * x_edge, h], center = true);
         if (pointy) {
             // pointy-top hexes: rows stacked in Y (pitch apart), hexes spaced S
             // along X within a row, alternate rows offset S/2 -> peaked roofs.
-            ny = ceil((h/2) / pitch) + 1;
-            nx = ceil((w/2) / S) + 1;
             for (r = [-ny : ny]) {
                 x_off = (r % 2 == 0) ? 0 : S/2;
                 if (abs(r*pitch) + r_hole <= h/2)          // whole row fits -> no flat top
@@ -268,11 +276,11 @@ module honeycomb_panel_2d(w, h, hs, hw, pointy = false) {
         } else {
             // flat-top hexes: columns spaced in X (pitch apart), hexes spaced S
             // along Y within a column, alternate columns offset S/2.
-            nx = ceil((w/2) / pitch) + 1;
-            ny = ceil((h/2) / S) + 1;
-            for (c = [-nx : nx]) {
+            nxf = ceil((w/2) / pitch) + 1;
+            nyf = ceil((h/2) / S) + 1;
+            for (c = [-nxf : nxf]) {
                 y_off = (c % 2 == 0) ? 0 : S/2;
-                for (r = [-ny : ny])
+                for (r = [-nyf : nyf])
                     translate([c*pitch, r*S + y_off])
                         circle(r = r_hole, $fn = 6);
             }
