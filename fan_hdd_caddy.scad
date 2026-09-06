@@ -115,7 +115,9 @@ band_slot   = 2;         // stretch the strip screw holes into X slots this much
 //     self-supporting.
 // On the base, a solid square is kept around each corner screw and solid
 // strips under the walls; on the walls, a solid border is kept on every edge.
-wall_hex_size    = 24;  // wall hole flat-to-flat opening (mm) -> big & sparse for speed
+wall_hex_size    = 27;  // wall hole flat-to-flat opening (mm) -> big & sparse for speed.
+                        // 27 is the largest size that fits 3 WHOLE rows in the
+                        // wall height, so no row is clipped into a bridge.
 wall_hex_wall    = 3;   // wall strut thickness between holes (mm) -> few, sturdy struts
 base_hex_size    = wall_hex_size;  // base hole opening (mm) -> same size as the wall holes
 base_hex_wall    = 2;   // base strut thickness between holes (mm) -> thinner, for airflow
@@ -239,6 +241,11 @@ module countersunk_hole(thickness, shaft_d, head_d, top = true, slot = 0) {
 // gives flat-top hexes (used for the base, where the holes go straight through
 // so their shape never bridges); `pointy = true` gives pointy-top hexes whose
 // peaked roofs stay self-supporting when the panel stands up as a wall vent.
+// In pointy mode only rows that fit WHOLLY inside the panel height are emitted:
+// a row clipped by the top edge would leave a flat-topped opening, i.e. a
+// bridge to print. Columns are clipped at the sides (vertical cuts print fine),
+// but a hex whose center is already outside the panel is dropped so no thin
+// sliver is left at the edge.
 module honeycomb_panel_2d(w, h, hs, hw, pointy = false) {
     S      = hs + hw;            // center-to-center spacing (all 6 neighbors)
     r_hole = hs / sqrt(3);       // circumradius of each hex hole
@@ -252,9 +259,11 @@ module honeycomb_panel_2d(w, h, hs, hw, pointy = false) {
             nx = ceil((w/2) / S) + 1;
             for (r = [-ny : ny]) {
                 x_off = (r % 2 == 0) ? 0 : S/2;
-                for (c = [-nx : nx])
-                    translate([c*S + x_off, r*pitch])
-                        rotate(30) circle(r = r_hole, $fn = 6);
+                if (abs(r*pitch) + r_hole <= h/2)          // whole row fits -> no flat top
+                    for (c = [-nx : nx])
+                        if (abs(c*S + x_off) <= w/2)       // center inside -> no edge sliver
+                            translate([c*S + x_off, r*pitch])
+                                rotate(30) circle(r = r_hole, $fn = 6);
             }
         } else {
             // flat-top hexes: columns spaced in X (pitch apart), hexes spaced S
